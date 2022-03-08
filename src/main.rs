@@ -12,9 +12,10 @@ use rand::{Rng,thread_rng};
 use num_traits::real::Real;
 use std::rc::Rc;
 use std::mem;
-use std::cmp::Ordering;
 use ordered_float::OrderedFloat;
 use std::cell::RefCell;
+use std::time::Instant;
+
 
 #[derive(Debug, Copy, Clone, Default)]
 struct V3<T>
@@ -209,90 +210,35 @@ struct Ray {
 }
 
 impl Ray {
-    fn new (ro: Vec3, rd: Vec3) -> Self { Self {ro, rd} }
+    //fn new (ro: Vec3, rd: Vec3) -> Self { Self {ro, rd} }
     fn at(&self, t: NumberType) -> Vec3 { self.ro + self.rd*t }
 }
 
 fn ray_color(ray: &Ray, world: &dyn Hittable, depth: u32, acc: Vec3) -> Vec3 {
-    //let acc = acc+Vec3::one(0.1);
     if depth==0 {return Vec3::default();}
+
     let mut rec = HitRecord::default();
-    if world.hit(ray, 0.001, NumberType::INFINITY, &mut rec) {
-        let mut scattered = Ray::default();
-        let mut attenuation = Vec3::default();
-
-        let icol = if rec.material.scatter(ray, &rec, &mut attenuation, &mut scattered)
-        {ray_color(&scattered, world, depth-1, acc)}
-        else {Vec3::new(0.0,0.0,0.0)};
-
-        return attenuation*icol + rec.material.emission();
+    if !world.hit(ray, 0.001, NumberType::INFINITY, &mut rec) {
+        return Vec3::one(0.1) // sky
     }
-    let unit_dir = ray.rd.normalized();
-    let t = (unit_dir.y + 1.0)*0.5;
-    (Vec3::new(1.0,1.0,1.0)*(1.0-t) + Vec3::new(0.5,0.7,1.0)*t)*0.3
+
+    let mut scattered = Ray::default();
+    let mut attenuation = Vec3::one(0.0);
+    let emitted = rec.material.emission();
+
+    if !rec.material.scatter(ray, &rec, &mut attenuation, &mut scattered) {return emitted;}
+
+    return emitted + attenuation*ray_color(&scattered, world, depth-1, acc);
 }
 
-struct HitRecord2 {
+
+#[derive(Default)]
+struct HitRecord {
     p: Vec3,
     n: Vec3,
     material: MaterialEnum,
     t: NumberType,
     front_face: bool,
-}
-
-
-
-struct HitRecord {
-    p: Vec3,
-    n: Vec3,
-    material: Rc<dyn Material>,
-    t: NumberType,
-    front_face: bool,
-}
-
-impl Default for HitRecord {
-    fn default() -> Self {
-        HitRecord
-        {
-            p: Vec3::default(),
-            n: Vec3::default(),
-            material: Rc::new(Lambertian{albedo: Vec3::default()}),
-            t: NumberType::default(),
-            front_face: bool::default(),
-        }
-    }
-}
-
-#[derive(Default)]
-struct HittableObjectList 
-{
-    l: Vec<Box<dyn Hittable>>
-}
-
-
-impl Hittable for HittableObjectList {
-    fn hit(&self, ray: &Ray, t_min: NumberType, t_max: NumberType, rec: &mut HitRecord) -> bool
-    {
-        let mut hit = false;
-        let mut closest = t_max;
-        for object in &self.l {
-            if object.hit(ray, t_min, closest, rec) {
-                hit = true;
-                closest = rec.t;
-            }
-        }
-        hit
-    }
-    fn bounding_box(&self, aabb: &mut AABB) -> bool {
-        if self.l.len()>0 {
-
-
-            true
-        }
-        else {
-            false
-        }
-    }
 }
 
 impl HitRecord {
@@ -305,13 +251,34 @@ impl HitRecord {
 
 trait Hittable {
     fn hit(&self, ray: &Ray, t_min: NumberType, t_max: NumberType, rec: &mut HitRecord) -> bool;
-    fn bounding_box(&self, aabb: &mut AABB) -> bool {false}  
+    fn bounding_box(&self, _aabb: &mut AABB) -> bool {false}  
+}
+
+enum HittableObject {
+    Sphere(Sphere),
+    BVHnode(BVHnode),
+}
+
+impl Hittable for HittableObject
+{
+    fn hit(&self, ray: &Ray, t_min: NumberType, t_max: NumberType, rec: &mut HitRecord) -> bool {
+        match self {
+            HittableObject::Sphere(s) => s.hit(ray, t_min, t_max, rec),
+            HittableObject::BVHnode(b) => b.hit(ray, t_min, t_max, rec),
+        }
+    }
+    fn bounding_box(&self, aabb: &mut AABB) -> bool {
+        match self {
+            HittableObject::Sphere(s) => s.bounding_box(aabb),
+            HittableObject::BVHnode(b) => b.bounding_box(aabb),
+        }
+    }
 }
 
 struct Sphere {
     center: Vec3,
     radius: NumberType,
-    material: Rc<dyn Material>,
+    material: MaterialEnum,//Rc<dyn Material>,
 }
 
 impl Default for Sphere{
@@ -320,7 +287,7 @@ impl Default for Sphere{
         {
             center: Vec3::default(),
             radius: NumberType::default(),
-            material: Rc::new(Lambertian{albedo: Vec3::default()}),
+            material: MaterialEnum::Lambertian(Lambertian{albedo: Vec3::default()}),
         }
     }
 }
@@ -350,6 +317,7 @@ impl Hittable for Sphere {
     }
     fn bounding_box(&self,  aabb: &mut AABB) -> bool
     {
+        println!("sphere bounding box");
         aabb.maximum = self.center+Vec3::one(self.radius);
         aabb.maximum = self.center+Vec3::one(self.radius);
         true
@@ -361,15 +329,41 @@ trait Material {
     fn emission(&self) -> Vec3 {Vec3::one(0.0)}
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy,Clone)]
 enum MaterialEnum {
-    Lambertian,
-    Metal,
-    Dielectric,
-    Emissive,
+    Lambertian(Lambertian),
+    Metal(Metal),
+    Dielectric(Dielectric),
+    Emissive(Emissive),
 }
 
-#[derive(Default)]
+impl Default for MaterialEnum {
+    fn default() -> Self {
+        MaterialEnum::Lambertian(Lambertian{albedo: Vec3::default()})
+    }
+}
+
+impl Material for MaterialEnum
+{
+    fn scatter(&self,ray: &Ray, rec: &HitRecord, attenuation: &mut Vec3, sray: &mut Ray) -> bool
+    {
+        match self {
+            MaterialEnum::Metal(m) => m.scatter(ray, rec, attenuation, sray),
+            MaterialEnum::Lambertian(l) => l.scatter(ray, rec, attenuation, sray),
+            MaterialEnum::Dielectric(d) => d.scatter(ray, rec, attenuation, sray),
+            MaterialEnum::Emissive(e) => e.scatter(ray, rec, attenuation, sray),
+        }
+    }
+    fn emission(&self) -> Vec3 {
+        match self {
+            MaterialEnum::Metal(m) => m.emission(),
+            MaterialEnum::Lambertian(l) => l.emission(),
+            MaterialEnum::Dielectric(d) => d.emission(),
+            MaterialEnum::Emissive(e) => e.emission(),
+        }
+    }
+}
+#[derive(Copy,Clone,Default)]
 struct Lambertian {
     albedo: Vec3,
 }
@@ -383,7 +377,7 @@ impl Material for Lambertian {
     }
 }
 
-#[derive(Default)]
+#[derive(Copy,Clone,Default)]
 struct Emissive{
     light: Vec3,
 }
@@ -391,7 +385,7 @@ impl Material for Emissive{
     fn emission(&self) -> Vec3 {self.light}
 }
 
-#[derive(Default)]
+#[derive(Copy,Clone,Default)]
 struct Metal {
     albedo: Vec3,
     blur: NumberType,
@@ -406,7 +400,9 @@ impl Material for Metal{
     }
 }
 
-#[derive(Default)]
+
+
+#[derive(Copy,Clone,Default)]
 struct Dielectric {
     ir: NumberType,
 }
@@ -504,18 +500,18 @@ impl Camera {
     }
 }
 
-struct Test{
-    x: i32,
-    y: Option<Box<Test>>,
-}
-
-enum List<'a> {
-    Node {
-        data: i32,
-        next: &'a List<'a>,
-    },
-    Tail,
-}
+//struct Test{
+//    x: i32,
+//    y: Option<Box<Test>>,
+//}
+//
+//enum List<'a> {
+//    Node {
+//        data: i32,
+//        next: &'a List<'a>,
+//    },
+//    Tail,
+//}
 
 #[derive(Copy, Clone, Default)]
 struct AABB {
@@ -570,11 +566,16 @@ impl Default for BVHnode{
 impl Hittable for BVHnode {
     fn hit(&self, ray: &Ray, t_min: NumberType, t_max: NumberType, rec: &mut HitRecord) -> bool {
         if !self.aabb.hit(ray, t_min, t_max) {return false;}
-        let hit_left = self.left.hit(ray, t_min, t_max, rec);
-        let hit_right = self.right.hit(ray, t_min, if hit_left {rec.t} else {t_max}, rec);
+        let hit_left = self.left.borrow_mut().hit(ray, t_min, t_max, rec);
+        let hit_right = self.right.borrow_mut().hit(ray, t_min, if hit_left {rec.t} else {t_max}, rec);
         return hit_left || hit_right;
     }
-    fn bounding_box(&self, aabb: &mut AABB) -> bool {false}  
+    fn bounding_box(&self, aabb: &mut AABB) -> bool {
+        aabb.minimum = self.aabb.minimum;
+        aabb.maximum = self.aabb.maximum;
+        println!("BVHnode bounding box");
+        true
+    }  
 }
 
 
@@ -586,17 +587,22 @@ impl BVHnode {
         if !a.borrow_mut().bounding_box(&mut a_box) {panic!("missing implemenation for AABB");}
         else {a_box.minimum[axis]}
     }
-    //fn box_cmp<T: Hittable + ?Sized, U: Hittable + ?Sized>(a: Rc<T>, b: Rc<U>) -> Ordering{
-    //    Self::box_val(a,0).partial_cmp(&Self::box_val(b,0)).unwrap()
-    //}
 
     fn construct(&mut self, objects: Vec<Rc<RefCell<dyn Hittable>>>)
     {
         let mut copy = objects.clone();
         let axis: u8 = thread_rng().gen_range(0..3);
+
+        println!("Axis: {axis}");
        
+        let x = move |a:&Rc<RefCell<dyn Hittable>>| OrderedFloat(Self::box_val(a,axis));
 
         let object_span = copy.len();
+        println!("object_span = {object_span}");
+
+        if object_span == 0 {
+            panic!("no elements when running construct");
+        }
         if object_span == 1 {
             self.left  = copy[copy.len()-1].clone();
             self.right = copy[copy.len()-1].clone();
@@ -604,88 +610,107 @@ impl BVHnode {
         else if object_span == 2 {
             self.left  = copy[copy.len()-1].clone();
             self.right = copy[copy.len()-2].clone();
+            //if x(&self.left) > x(&self.right)
+            //{
+            //    mem::swap(&mut self.left, &mut self.right);
+            //}
         }
         else {
-            let x = move |a:&Rc<RefCell<dyn Hittable>>| OrderedFloat(Self::box_val(a,axis));
             copy.sort_by_key(x);
             let mid = object_span/2;
-            let left_node = Rc::new(BVHnode::default());
-            left_node.construct(copy);
+            let left_node = Rc::new(RefCell::new(BVHnode::default()));
+            left_node.borrow_mut().construct(copy[mid..].to_vec());
             self.left = left_node;
-
+            let right_node = Rc::new(RefCell::new(BVHnode::default()));
+            right_node.borrow_mut().construct(copy[..mid].to_vec());
+            self.right = right_node;
         }
+
+        let mut box_left = AABB::default(); 
+        let mut box_right = AABB::default(); 
+        
+        let has_left = self.left.borrow().bounding_box(&mut box_left);
+        let has_right = self.right.borrow().bounding_box(&mut box_right);
+        if !has_left || !has_right
+        {
+            panic!("AABB missing");
+        }
+
+        self.aabb = box_left.surrounding_box(box_right);
     }
 }
 
 fn main() {
-    let aspect_ratio      = 3.0/2.0;//16.0/9.0;
-    let imgx              = 400;
-    let imgy              = ((imgx as NumberType)/aspect_ratio) as u32;
+    let aspect_ratio = 16.0/9.0;
+    let imgx         = 400;
+    let imgy         = ((imgx as NumberType)/aspect_ratio) as u32;
 
     let mut imgbuf = image::ImageBuffer::new(imgx, imgy);
-
-    let mut world: HittableObjectList = HittableObjectList::default();
     
-    let material = Metal{albedo:Vec3::new(0.5,0.5,0.5),blur:0.3};
-    world.l.push(Box::new(Sphere {material: Rc::new(material), radius: 1000.0,center: Vec3::new(0.0,-1000.0,0.0)}));
+    
+    let mut object_list: Vec<Rc<RefCell<dyn Hittable>>> = Vec::new();
+
     let material = Lambertian{albedo:Vec3::new(0.4,0.2,0.1)};
-    world.l.push(Box::new(Sphere {material: Rc::new(material), radius: 1.0,center: Vec3::new(0.0,1.0,0.0)}));
+    object_list.push(Rc::new(RefCell::new(Sphere {material: MaterialEnum::Lambertian(material), radius: 1.0,center: Vec3::new(0.0,  1.0,0.0)})));
     let material = Dielectric{ir:1.5};
-    world.l.push(Box::new(Sphere {material: Rc::new(material), radius: 1.0,center: Vec3::new(-4.0,1.0,0.0)}));
+    object_list.push(Rc::new(RefCell::new(Sphere {material: MaterialEnum::Dielectric(material), radius: 1.0,center: Vec3::new(-4.0, 1.0,0.0)})));
     let material = Metal{albedo:Vec3::new(0.7,0.6,0.5), blur:0.0};
-    world.l.push(Box::new(Sphere {material: Rc::new(material), radius: 1.0,center: Vec3::new(4.0,1.0,0.0)}));
+    object_list.push(Rc::new(RefCell::new(Sphere {material: MaterialEnum::Metal(material), radius: 1.0,center: Vec3::new(4.0,  1.0,0.0)})));
+    
     
     let mut rng = thread_rng();
 
-    if true{ 
+    if true { 
         let wid = 8;
-        let sc = 1.3;
+        let sc = 2.0;
         for a in -wid..wid {
             for b in -wid..wid {
-                let rad = random_range(0.1,0.4);
-                let center = Vec3::new((a as NumberType + 0.9*random_val())*sc, rad, (b as NumberType + 0.9*random_val())*sc);
-                if (center-Vec3::new(4.0,rad,0.0)).length() > 0.9
+                let rad = random_range(0.1,0.3);
+                let center = Vec3::new((a as NumberType + 0.9*random_val())*sc, random_range(-1.0,1.0)*5.0, (b as NumberType + 0.9*random_val())*sc);
+                if (center-Vec3::new(4.0,0.5,0.0)).length() > 0.9
                 {
                     let choose_mat = random_val();
 
                     if choose_mat < 0.25 {
                         let albedo = Vec3::random();
-                        let material = Rc::new(Lambertian {albedo});
-                        world.l.push(Box::new(Sphere{material: material.clone(), radius: rad, center}));
+                        let material = MaterialEnum::Lambertian(Lambertian {albedo});
+                        object_list.push(Rc::new(RefCell::new(Sphere{material, radius: rad, center})));
                     }
                     else if choose_mat < 0.5 {
                         let light = Vec3::random()*4.0;
-                        let material = Rc::new(Emissive{light});
-                        world.l.push(Box::new(Sphere{material: material.clone(), radius: rad, center}));
+                        let material = MaterialEnum::Emissive(Emissive{light});
+                        object_list.push(Rc::new(RefCell::new(Sphere{material: material.clone(), radius: rad, center})));
                     }
                     else if choose_mat < 0.75{
                         let albedo = Vec3::random();
                         let blur = random_range(0.0,0.5);
-                        let material = Rc::new(Metal{albedo,blur});
-                        world.l.push(Box::new(Sphere{material: material.clone(), radius: rad, center}));
+                        let material = MaterialEnum::Metal(Metal{albedo,blur});
+                        object_list.push(Rc::new(RefCell::new(Sphere{material: material.clone(), radius: rad, center})));
                     }
                     else {
-                        let material = Rc::new(Dielectric{ir:1.5});
-                        world.l.push(Box::new(Sphere{material: material.clone(), radius: rad, center}));
+                        let material = MaterialEnum::Dielectric(Dielectric{ir:1.5});
+                        object_list.push(Rc::new(RefCell::new(Sphere{material: material.clone(), radius: rad, center})));
                     }
 
-                    //let material_right2  = Metal {albedo: Vec3::new(rng.gen::<NumberType>(),rng.gen::<NumberType>(),rng.gen::<NumberType>()), blur: rng.gen::<NumberType>()};
-                    //let mat = Rc::new(material_right2);
-                    //world.l.push(Box::new(Sphere {material: mat.clone(), radius: 0.2, center}));
                 }
             }
         }
     }
-    
-    //let cam = Camera::new(Vec3::new(-2.0,2.0,1.0), Vec3::new(0.0,0.0,-1.0), Vec3::new(0.0,1.0,0.0), 90.0, aspect_ratio);
-    let cam = Camera::new(Vec3::new(13.0,2.0,3.0), Vec3::new(0.0,0.0,0.0), Vec3::new(0.0,1.0,0.0), 20.0, aspect_ratio);
-    //let cam = Camera::new(Vec3::one(0.0), Vec3::new(0.0,0.0,-1.0), Vec3::new(0.0,1.0,0.0), 90.0, aspect_ratio);
-    
-    for (x, y, pixel) in imgbuf.enumerate_pixels_mut() {
-        if x==0 {println!("row {y}/{imgy}");}
+    let mut bvh = BVHnode::default();
 
-        let samples   = 100;
-        let max_depth = 50;
+    let num_objects = object_list.len();
+    bvh.construct(object_list);
+    
+    //let cam = Camera::new(Vec3::new(13.0,2.0,3.0), Vec3::new(0.0,0.0,0.0), Vec3::new(0.0,1.0,0.0), 20.0, aspect_ratio);
+    let cam = Camera::new(Vec3::new(13.0,2.0,3.0), Vec3::new(0.0,0.0,0.0), Vec3::new(0.0,1.0,0.0), 45.0, aspect_ratio);
+    
+    let start = Instant::now();
+
+    for (x, y, pixel) in imgbuf.enumerate_pixels_mut() {
+        if x==0 {let f = y as NumberType/imgy as NumberType * 100.0;println!("row {y}/{imgy}: {f}%");}
+
+        let samples   = 2;
+        let max_depth = 5;
 
         let mut col = Vec3::default();
 
@@ -694,13 +719,8 @@ fn main() {
             let u =     (x as NumberType+rng.gen::<NumberType>()) / (imgx as NumberType - 1.0);
             let v = 1.0-(y as NumberType+rng.gen::<NumberType>()) / (imgy as NumberType - 1.0);
         
-            //cam.origin = origin;
-            //cam.lower_left_corner = lower_left_corner;
-            //cam.horizontal = horizontal;
-            //cam.vertical = vertical;
-
-            let ray = cam.get_ray(u,v);//Ray::new(origin, (lower_left_corner + horizontal*u + vertical*v - origin).normalized());
-            col += ray_color(&ray, &world, max_depth, Vec3::one(0.0));
+            let ray = cam.get_ray(u,v);
+            col += ray_color(&ray, &bvh, max_depth, Vec3::one(0.0));
         }
         col=col/(samples as NumberType);
 
@@ -710,6 +730,9 @@ fn main() {
 
         *pixel = image::Rgb([r, g, b]);
     }
+    let duration = (start.elapsed().as_millis() as NumberType)/1000.0;
+    println!("Rendered {num_objects} objects in {duration} seconds");
+
 
     imgbuf.save("output.png").unwrap();
 }

@@ -14,11 +14,11 @@ mut_static = "*"
 smallvec = "*"
 ordered-float = "*"
 
-[rust]
-debuginfo-level = 1
+#[rust]
+#debuginfo-level = 1
 
 [profile.release]
-debug = 1
+#debug = 1
 #lto = true
 #panic = "abort"
 
