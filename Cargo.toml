@@ -1,0 +1,24 @@
+[package]
+name = "raytracing-fixed-point"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+image = "*"
+num-traits = "*"
+rand = "*"
+lazy_static = "*"
+mut_static = "*"
+smallvec = "*"
+ordered-float = "*"
+
+[rust]
+debuginfo-level = 1
+
+[profile.release]
+debug = 1
+#lto = true
+#panic = "abort"
+
