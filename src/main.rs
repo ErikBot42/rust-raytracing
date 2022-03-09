@@ -559,10 +559,10 @@ trait Material {
 #[derive(Copy,Clone)]
 enum MaterialEnum {
     Lambertian(Lambertian),
-    Metal(Metal),
-    Dielectric(Dielectric),
     Emissive(Emissive),
-    Isotropic(Isotropic),
+//    Metal(Metal),
+//    Dielectric(Dielectric),
+//    Isotropic(Isotropic),
 }
 
 impl Default for MaterialEnum {
@@ -576,20 +576,20 @@ impl Material for MaterialEnum
     fn scatter(&self,ray: &Ray, rec: &HitRecord, attenuation: &mut Vec3, sray: &mut Ray) -> bool
     {
         match self {
-            MaterialEnum::Metal(m) => m.scatter(ray, rec, attenuation, sray),
             MaterialEnum::Lambertian(l) => l.scatter(ray, rec, attenuation, sray),
-            MaterialEnum::Dielectric(d) => d.scatter(ray, rec, attenuation, sray),
             MaterialEnum::Emissive(e) => e.scatter(ray, rec, attenuation, sray),
-            MaterialEnum::Isotropic(i) => i.scatter(ray, rec, attenuation, sray),
+            //MaterialEnum::Metal(m) => m.scatter(ray, rec, attenuation, sray),
+            //MaterialEnum::Dielectric(d) => d.scatter(ray, rec, attenuation, sray),
+            //MaterialEnum::Isotropic(i) => i.scatter(ray, rec, attenuation, sray),
         }
     }
     fn emission(&self) -> Vec3 {
         match self {
-            MaterialEnum::Metal(m) => m.emission(),
             MaterialEnum::Lambertian(l) => l.emission(),
-            MaterialEnum::Dielectric(d) => d.emission(),
             MaterialEnum::Emissive(e) => e.emission(),
-            MaterialEnum::Isotropic(i) => i.emission(),
+            //MaterialEnum::Metal(m) => m.emission(),
+            //MaterialEnum::Dielectric(d) => d.emission(),
+            //MaterialEnum::Isotropic(i) => i.emission(),
         }
     }
 }
@@ -615,62 +615,59 @@ impl Material for Emissive{
     fn emission(&self) -> Vec3 {self.light}
 }
 
-#[derive(Copy,Clone,Default)]
-struct Metal {
-    albedo: Vec3,
-    blur: NumberType,
-}
-impl Material for Metal{
-    fn scatter(&self,ray: &Ray, rec: &HitRecord, attenuation: &mut Vec3, sray: &mut Ray) -> bool
-    {
-        sray.rd.set(ray.rd.normalized().reflect(rec.n)+Vec3::random_unit()*self.blur);
-        sray.ro.set(rec.p);
-        attenuation.set(self.albedo);
-        sray.rd.dot(rec.n)>0.0
-    }
-}
+//#[derive(Copy,Clone,Default)]
+//struct Metal {
+//    albedo: Vec3,
+//    blur: NumberType,
+//}
+//impl Material for Metal{
+//    fn scatter(&self,ray: &Ray, rec: &HitRecord, attenuation: &mut Vec3, sray: &mut Ray) -> bool
+//    {
+//        sray.rd.set(ray.rd.normalized().reflect(rec.n)+Vec3::random_unit()*self.blur);
+//        sray.ro.set(rec.p);
+//        attenuation.set(self.albedo);
+//        sray.rd.dot(rec.n)>0.0
+//    }
+//}
 
-
-
-#[derive(Copy,Clone,Default)]
-struct Dielectric {
-    ir: NumberType,
-}
-impl Dielectric {
-    fn reflectance(cosine: NumberType, ref_idx: NumberType ) -> NumberType
-    {
-        let mut r0 = (1.0-ref_idx)/(1.0+ref_idx);
-        r0 = r0*r0;
-        return r0 + (1.0-r0)*(1.0-cosine).powi(5);
-    }
-}
-
-impl Material for Dielectric{
-    fn scatter(&self,ray: &Ray, rec: &HitRecord, attenuation: &mut Vec3, sray: &mut Ray) -> bool
-    {
-        attenuation.set(Vec3::one(0.9));
-        let refraction_ratio = if rec.front_face {1.0/self.ir} else {self.ir};
-        
-        let unit_dir = ray.rd.normalized();
-
-        let cos_theta = (-unit_dir.dot(rec.n)).min(1.0);
-        let sin_theta = 1.0-cos_theta.powi(2);
-        
-        let direction: Vec3;
-        if refraction_ratio * sin_theta > 1.0
-        || Self::reflectance(cos_theta, refraction_ratio) > random_val(){
-            direction = unit_dir.reflect(rec.n);
-        }
-        else
-        {
-            direction = unit_dir.refract(rec.n, refraction_ratio);
-        }
-        //let refracted = unit_dir.refract(rec.n, refraction_ratio);
-        sray.rd.set(direction);
-        sray.ro.set(rec.p);
-        true
-    }
-}
+//#[derive(Copy,Clone,Default)]
+//struct Dielectric {
+//    ir: NumberType,
+//}
+//impl Dielectric {
+//    fn reflectance(cosine: NumberType, ref_idx: NumberType ) -> NumberType
+//    {
+//        let mut r0 = (1.0-ref_idx)/(1.0+ref_idx);
+//        r0 = r0*r0;
+//        return r0 + (1.0-r0)*(1.0-cosine).powi(5);
+//    }
+//}
+//impl Material for Dielectric{
+//    fn scatter(&self,ray: &Ray, rec: &HitRecord, attenuation: &mut Vec3, sray: &mut Ray) -> bool
+//    {
+//        attenuation.set(Vec3::one(0.9));
+//        let refraction_ratio = if rec.front_face {1.0/self.ir} else {self.ir};
+//        
+//        let unit_dir = ray.rd.normalized();
+//
+//        let cos_theta = (-unit_dir.dot(rec.n)).min(1.0);
+//        let sin_theta = 1.0-cos_theta.powi(2);
+//        
+//        let direction: Vec3;
+//        if refraction_ratio * sin_theta > 1.0
+//        || Self::reflectance(cos_theta, refraction_ratio) > random_val(){
+//            direction = unit_dir.reflect(rec.n);
+//        }
+//        else
+//        {
+//            direction = unit_dir.refract(rec.n, refraction_ratio);
+//        }
+//        //let refracted = unit_dir.refract(rec.n, refraction_ratio);
+//        sray.rd.set(direction);
+//        sray.ro.set(rec.p);
+//        true
+//    }
+//}
 
 #[derive(Clone, Copy, Default, Debug)]
 struct Camera {
