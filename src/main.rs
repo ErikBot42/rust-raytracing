@@ -4,7 +4,7 @@ extern crate rand;
 extern crate smallvec;
 
 //DivAssign,MulAssign
-use std::ops::{Add, AddAssign, Div, Mul, Neg, Sub, SubAssign, Index};
+use std::ops::{Add, AddAssign, Div, Mul, Neg, Sub, SubAssign, Index, IndexMut};
 use rand::{Rng,thread_rng};
 use num_traits::real::Real;
 use std::rc::Rc;
@@ -117,8 +117,7 @@ T: Div + Div<Output = T> + Copy + Clone {
     }
 }
 
-impl<T> Index<u8> for V3<T>
-{
+impl<T> Index<u8> for V3<T> {
     type Output = T;
     fn index(&self, index: u8) -> &T {
         match index {
@@ -129,6 +128,19 @@ impl<T> Index<u8> for V3<T>
         }
     }
 }
+impl<T> IndexMut<u8> for V3<T> {
+    fn index_mut(&mut self, index: u8) -> &mut T{
+        match index {
+            0 => &mut self.x,
+            1 => &mut self.y,
+            2 => &mut self.z,
+            _ => &mut self.z,
+        }
+    }
+}
+
+
+
 
 impl<T> V3<T> 
 where
@@ -181,6 +193,11 @@ impl Vec3 {
     {
         Self::random_range(-1.0,1.0).normalized()
     }
+    fn random_in_unit_hemisphere(n:Vec3) -> V3<NumberType>
+    {
+        let r = Self::random_unit();
+        if r.dot(n)>0.0 {r} else {-r}
+    }
     fn refract(self, n: Vec3, etiot: NumberType) -> Vec3
     {
         let cos_theta = -self.dot(n).min(1.0);
@@ -228,16 +245,18 @@ fn ray_color(ray: &Ray, world: &HittableObject, depth: u32, acc: Vec3) -> Vec3 {
 }
 
 
-#[derive(Default)]
-struct HitRecord {
+#[derive(Copy, Clone, Default)]
+struct HitRecord<'a> {
     p: Vec3,
     n: Vec3,
-    material: MaterialEnum,
+    u: NumberType,
+    v: NumberType,
+    material: MaterialEnum<'a>,
     t: NumberType,
     front_face: bool,
 }
 
-impl HitRecord {
+impl<'a> HitRecord<'a> {
     fn set_face_normal(&mut self, ray: &Ray, outward_normal: Vec3)
     {
         self.front_face = ray.rd.dot(outward_normal) < 0.0;
@@ -245,8 +264,10 @@ impl HitRecord {
     }
 }
 
-trait Hittable {
-    fn hit(&self, ray: &Ray, t_min: NumberType, t_max: NumberType, rec: &mut HitRecord) -> bool;
+trait Hittable<'a> {
+
+    // TODO: return option instead
+    fn hit(&self, ray: &Ray, t_min: NumberType, t_max: NumberType, rec: &mut HitRecord<'a>) -> bool;
     fn bounding_box(&self, _aabb: &mut AABB) -> bool {false}  
 }
 
@@ -258,18 +279,22 @@ trait Hittable {
 //    } 
 //}
 
+#[derive(Clone)]
 enum HittableObject<'a> {
-    Sphere(Sphere),
+    Sphere(Sphere<'a>),
     BVHnode(BVHnode<'a>),
-    XYRect(XYRect),
-    XZRect(XZRect),
-    YZRect(YZRect),
+    XYRect(XYRect<'a>),
+    XZRect(XZRect<'a>),
+    YZRect(YZRect<'a>),
     ConstantMedium(ConstantMedium<'a>),
+    Cuboid(Cuboid<'a>),
+    Translate(Translate<'a>),
+    RotateY(RotateY<'a>),
 }
 
-impl<'a> Hittable for HittableObject<'a>
+impl<'a> Hittable<'a> for HittableObject<'a>
 {
-    fn hit(&self, ray: &Ray, t_min: NumberType, t_max: NumberType, rec: &mut HitRecord) -> bool {
+    fn hit(&self, ray: &Ray, t_min: NumberType, t_max: NumberType, rec: &mut HitRecord<'a>) -> bool {
         match self {
             HittableObject::Sphere(s) => s.hit(ray, t_min, t_max, rec),
             HittableObject::BVHnode(b) => b.hit(ray, t_min, t_max, rec),
@@ -277,6 +302,9 @@ impl<'a> Hittable for HittableObject<'a>
             HittableObject::XZRect(xz) => xz.hit(ray, t_min, t_max, rec),
             HittableObject::YZRect(yz) => yz.hit(ray, t_min, t_max, rec),
             HittableObject::ConstantMedium(c) => c.hit(ray, t_min, t_max, rec),
+            HittableObject::Cuboid(u) => u.hit(ray, t_min, t_max, rec),
+            HittableObject::Translate(t) => t.hit(ray, t_min, t_max, rec),
+            HittableObject::RotateY(ry) => ry.hit(ray, t_min, t_max, rec),
         }
     }
     fn bounding_box(&self, aabb: &mut AABB) -> bool {
@@ -287,6 +315,9 @@ impl<'a> Hittable for HittableObject<'a>
             HittableObject::XZRect(xz) => xz.bounding_box(aabb),
             HittableObject::YZRect(yz) => yz.bounding_box(aabb),
             HittableObject::ConstantMedium(c) => c.bounding_box(aabb),
+            HittableObject::Cuboid(u) => u.bounding_box(aabb),
+            HittableObject::Translate(t) => t.bounding_box(aabb),
+            HittableObject::RotateY(ry) => ry.bounding_box(aabb),
         }
     }
 }
@@ -297,16 +328,17 @@ impl<'a> Default for HittableObject<'a> {
     }
 }
 
-struct XYRect {
+#[derive(Default, Clone, Copy)]
+struct XYRect<'a> {
     x0: NumberType,
     x1: NumberType,
     y0: NumberType,
     y1: NumberType,
     k: NumberType,
-    material: MaterialEnum,
+    material: MaterialEnum<'a>,
 }
 
-impl Hittable for XYRect {
+impl<'a> Hittable<'a> for XYRect<'a> {
     fn bounding_box(&self, aabb: &mut AABB) -> bool {
         aabb.minimum = Vec3::new(
             self.x0,
@@ -318,7 +350,7 @@ impl Hittable for XYRect {
             self.k-0.0001);
         true
     }
-    fn hit(&self, ray: &Ray, t_min: NumberType, t_max: NumberType, rec: &mut HitRecord) -> bool {
+    fn hit(&self, ray: &Ray, t_min: NumberType, t_max: NumberType, rec: &mut HitRecord<'a>) -> bool {
         let t = (self.k - ray.ro.z)/ray.rd.z;
         if t<t_min || t>t_max {return false;}
 
@@ -327,7 +359,8 @@ impl Hittable for XYRect {
 
         if x<self.x0 || x>self.x1 || y<self.y0 || y>self.y1 {return false;}
         
-        //TODO uv
+        rec.u = (x-self.x0)/(self.x1-self.x0);
+        rec.v = (y-self.y0)/(self.y1-self.y0);
 
         rec.t = t;
         let outward_normal = Vec3::new(0.0,0.0,1.0);
@@ -340,16 +373,17 @@ impl Hittable for XYRect {
 }
 
 
-struct XZRect {
+#[derive(Default, Clone, Copy)]
+struct XZRect<'a> {
     x0: NumberType,
     x1: NumberType,
     z0: NumberType,
     z1: NumberType,
     k: NumberType,
-    material: MaterialEnum,
+    material: MaterialEnum<'a>,
 }
 
-impl Hittable for XZRect {
+impl<'a> Hittable<'a> for XZRect<'a> {
     fn bounding_box(&self, aabb: &mut AABB) -> bool {
         aabb.minimum = Vec3::new(
             self.x0,
@@ -361,7 +395,7 @@ impl Hittable for XZRect {
             self.k-0.0001);
         true
     }
-    fn hit(&self, ray: &Ray, t_min: NumberType, t_max: NumberType, rec: &mut HitRecord) -> bool {
+    fn hit(&self, ray: &Ray, t_min: NumberType, t_max: NumberType, rec: &mut HitRecord<'a>) -> bool {
         let t = (self.k - ray.ro.y)/ray.rd.y;
         if t<t_min || t>t_max {return false;}
 
@@ -370,7 +404,8 @@ impl Hittable for XZRect {
 
         if x<self.x0 || x>self.x1 || z<self.z0 || z>self.z1 {return false;}
         
-        //TODO uv
+        rec.u = (x-self.x0)/(self.x1-self.x0);
+        rec.v = (z-self.z0)/(self.z1-self.z0);
 
         rec.t = t;
         let outward_normal = Vec3::new(0.0,1.0,0.0);
@@ -383,16 +418,17 @@ impl Hittable for XZRect {
 }
 
 
-struct YZRect {
+#[derive(Default, Clone, Copy)]
+struct YZRect<'a> {
     y0: NumberType,
     y1: NumberType,
     z0: NumberType,
     z1: NumberType,
     k: NumberType,
-    material: MaterialEnum,
+    material: MaterialEnum<'a>,
 }
 
-impl Hittable for YZRect {
+impl<'a> Hittable<'a> for YZRect<'a> {
     fn bounding_box(&self, aabb: &mut AABB) -> bool {
         aabb.minimum = Vec3::new(
             self.y0,
@@ -404,7 +440,7 @@ impl Hittable for YZRect {
             self.k-0.0001);
         true
     }
-    fn hit(&self, ray: &Ray, t_min: NumberType, t_max: NumberType, rec: &mut HitRecord) -> bool {
+    fn hit(&self, ray: &Ray, t_min: NumberType, t_max: NumberType, rec: &mut HitRecord<'a>) -> bool {
         let t = (self.k - ray.ro.x)/ray.rd.x;
         if t<t_min || t>t_max {return false;}
 
@@ -413,7 +449,8 @@ impl Hittable for YZRect {
 
         if y<self.y0 || y>self.y1 || z<self.z0 || z>self.z1 {return false;}
         
-        //TODO uv
+        rec.u = (y-self.y0)/(self.y1-self.y0);
+        rec.v = (z-self.z0)/(self.z1-self.z0);
 
         rec.t = t;
         let outward_normal = Vec3::new(1.0,0.0,0.0);
@@ -425,26 +462,17 @@ impl Hittable for YZRect {
     }
 }
 
-struct Sphere {
+#[derive(Default, Clone, Copy)]
+struct Sphere<'a> {
     center: Vec3,
     radius: NumberType,
-    material: MaterialEnum,//Rc<dyn Material>,
-}
-
-impl Default for Sphere{
-    fn default() -> Self {
-        Sphere
-        {
-            center: Vec3::default(),
-            radius: NumberType::default(),
-            material: MaterialEnum::Lambertian(Lambertian{albedo: Vec3::default()}),
-        }
-    }
+    material: MaterialEnum<'a>,//Rc<dyn Material>,
 }
 
 
-impl Hittable for Sphere {
-    fn hit(&self, ray: &Ray, t_min: NumberType, t_max: NumberType, rec: &mut HitRecord) -> bool
+
+impl<'a> Hittable<'a> for Sphere<'a> {
+    fn hit(&self, ray: &Ray, t_min: NumberType, t_max: NumberType, rec: &mut HitRecord<'a>) -> bool
     {
         let oc = ray.ro - self.center;
         let a = ray.rd.dot2();
@@ -462,7 +490,8 @@ impl Hittable for Sphere {
         rec.p = ray.at(root);
         let outward_normal = (rec.p - self.center)/self.radius;
         rec.set_face_normal(ray, outward_normal);
-        rec.material = self.material.clone();
+        self.get_uv(outward_normal, &mut rec.u, &mut rec.v);
+        rec.material = self.material;
         true
     }
     fn bounding_box(&self,  aabb: &mut AABB) -> bool
@@ -474,30 +503,82 @@ impl Hittable for Sphere {
     }
 }
 
-//struct Cuboid {
-//    center: Vec3,
-//    dim: Vec3,
-//    material: MaterialEnum
-//}
-//
-//impl Hittable for Cuboid {
-//    fn hit(&self, ray: &Ray, t_min: NumberType, t_max: NumberType, rec: &mut HitRecord) -> bool
-//    {
-//        let m = Vec3::new(1.0/ray.rd.x, 1.0/ray.rd.y, 1.0/ray.rd.z);
-//        
-//
-//        true
-//    }
-//}
+impl<'a> Sphere<'a> {
+    fn get_uv(&self, p: Vec3, u: &mut NumberType, v: &mut NumberType)
+    {
+        let theta = (-p.y).acos();
+        let phi = (-p.z).atan2(p.x) + PI;
 
+        *u = phi / (2.0*PI);
+        *v = theta / PI;
+    }
+}
+
+#[derive(Default, Clone)]
+struct HittableList<'a> {
+    l: Vec<HittableObject<'a>>,
+}
+
+impl<'a> Hittable<'a> for HittableList<'a> {
+    fn hit(&self, ray: &Ray, t_min: NumberType, t_max: NumberType, rec: &mut HitRecord<'a>) -> bool {
+        let mut hit_anything = false;
+        let mut closest = t_max;
+        for object in &self.l {
+            if object.hit(ray, t_min, closest, rec) {
+                hit_anything = true;
+                closest = rec.t;
+            }
+        }
+        hit_anything
+    }
+}
+
+#[derive(Default, Clone)]
+struct Cuboid<'a> {
+    min: Vec3,
+    max: Vec3,
+    sides: HittableList<'a>,
+}
+impl<'a> Cuboid<'a> {
+    fn new(min: Vec3, max: Vec3, material: MaterialEnum<'a>) -> Self {
+        let mut sides = HittableList::default();
+        sides.l.push(HittableObject::XYRect(XYRect {x0: min.x, x1: max.x, y0: min.y, y1: max.y, k:max.z,material}));
+        sides.l.push(HittableObject::XYRect(XYRect {x0: min.x, x1: max.x, y0: min.y, y1: max.y, k:min.z,material}));
+        
+        sides.l.push(HittableObject::XZRect(XZRect {x0: min.x, x1: max.x, z0: min.z, z1: max.z, k:max.y,material}));
+        sides.l.push(HittableObject::XZRect(XZRect {x0: min.x, x1: max.x, z0: min.z, z1: max.z, k:min.y,material}));
+
+        sides.l.push(HittableObject::YZRect(YZRect {y0: min.y, y1: max.y, z0: min.z, z1: max.x, k:max.x,material}));
+        sides.l.push(HittableObject::YZRect(YZRect {y0: min.y, y1: max.y, z0: min.z, z1: max.x, k:min.x,material}));
+
+        Cuboid {
+            min,
+            max,
+            sides,
+        }
+    }
+}
+
+impl<'a> Hittable<'a> for Cuboid<'a> {
+    fn hit(&self, ray: &Ray, t_min: NumberType, t_max: NumberType, rec: &mut HitRecord<'a>) -> bool
+    {
+        self.sides.hit(ray, t_min, t_max, rec)
+    }
+    fn bounding_box(&self,  aabb: &mut AABB) -> bool {
+        *aabb = AABB{minimum:self.min, maximum:self.max};
+        true
+    }
+}
+
+#[derive(Clone, Copy)]
 struct ConstantMedium<'a> {
     neg_inv_denisty: NumberType,
     boundary: &'a HittableObject<'a>,
-    material: MaterialEnum,
+    material: MaterialEnum<'a>,
 }
 
-impl<'a> Hittable for ConstantMedium<'a> {
-    fn hit(&self, ray: &Ray, t_min: NumberType, t_max: NumberType, rec: &mut HitRecord) -> bool
+impl<'a> Hittable<'a> for ConstantMedium<'a> {
+    fn hit(&self, ray: &Ray, t_min: NumberType, t_max: NumberType, rec: &mut HitRecord<'a>) -> bool
     {
         let enable_debug = false;
         let debugging = enable_debug && random_val()<0.00001;
@@ -549,6 +630,42 @@ impl Material for Isotropic {
     }
 }
 
+
+
+
+#[derive(Copy,Clone,Default)]
+struct Lambertian<'a> {
+    texture: TextureEnum<'a>,
+}
+impl<'a> Material for Lambertian<'a> {
+    fn scatter(&self,_ray: &Ray, rec: &HitRecord, attenuation: &mut Vec3, sray: &mut Ray) -> bool
+    {
+        //sray.rd.set(rec.n + Vec3::random_unit());//Vec3::random_in_unit_hemisphere(rec.n));
+        sray.rd.set(Vec3::random_in_unit_hemisphere(rec.n));
+        sray.ro.set(rec.p);
+        *attenuation = self.texture.value(rec.u,rec.v,rec.p);
+        true
+    }
+}
+impl<'a> Lambertian<'a> {
+    fn new(texture: TextureEnum) -> MaterialEnum {
+        MaterialEnum::Lambertian(Lambertian {texture,})
+    } 
+    fn col(color: Vec3) -> MaterialEnum<'a> {
+        MaterialEnum::Lambertian(Lambertian {
+            texture: SolidColor::new(color),
+        }) 
+    }
+}
+
+#[derive(Copy,Clone,Default)]
+struct Emissive{
+    light: Vec3,
+}
+impl Material for Emissive{
+    fn emission(&self) -> Vec3 {self.light}
+}
+
 trait Material {
     fn scatter(&self,_ray: &Ray, _rec: &HitRecord, _attenuation: &mut Vec3, _sray: &mut Ray) -> bool {false}
 //    fn scatter(&self,_ray: &Ray, _rec: &HitRecord, _attenuation: &mut Vec3, _sray: &mut Ray) -> bool {false}
@@ -557,21 +674,21 @@ trait Material {
 }
 
 #[derive(Copy,Clone)]
-enum MaterialEnum {
-    Lambertian(Lambertian),
+enum MaterialEnum<'a> {
+    Lambertian(Lambertian<'a>),
     Emissive(Emissive),
 //    Metal(Metal),
 //    Dielectric(Dielectric),
 //    Isotropic(Isotropic),
 }
 
-impl Default for MaterialEnum {
+impl<'a> Default for MaterialEnum<'a> {
     fn default() -> Self {
-        MaterialEnum::Lambertian(Lambertian{albedo: Vec3::default()})
+        MaterialEnum::Lambertian(Lambertian::default())
     }
 }
 
-impl Material for MaterialEnum
+impl<'a> Material for MaterialEnum<'a>
 {
     fn scatter(&self,ray: &Ray, rec: &HitRecord, attenuation: &mut Vec3, sray: &mut Ray) -> bool
     {
@@ -593,26 +710,55 @@ impl Material for MaterialEnum
         }
     }
 }
-#[derive(Copy,Clone,Default)]
-struct Lambertian {
-    albedo: Vec3,
+
+trait Texture {
+    fn value(&self, u: NumberType, v: NumberType, p: Vec3) -> Vec3 {Vec3::default()}
 }
-impl Material for Lambertian {
-    fn scatter(&self,_ray: &Ray, rec: &HitRecord, attenuation: &mut Vec3, sray: &mut Ray) -> bool
-    {
-        sray.rd.set(rec.n + Vec3::random_unit());
-        sray.ro.set(rec.p);
-        attenuation.set(self.albedo);
-        true
+#[derive(Clone, Copy)]
+enum TextureEnum<'a> {
+    SolidColor(SolidColor),
+    CheckerTexture(CheckerTexture<'a>),
+}
+impl<'a> Default for TextureEnum<'a> {
+    fn default() -> Self {
+        TextureEnum::SolidColor(SolidColor::default())
     }
 }
 
-#[derive(Copy,Clone,Default)]
-struct Emissive{
-    light: Vec3,
+impl<'a> Texture for TextureEnum<'a> {
+    fn value(&self, u: NumberType, v: NumberType, p: Vec3) -> Vec3 {
+        match self {
+            TextureEnum::SolidColor(s) => s.value(u,v,p),
+            TextureEnum::CheckerTexture(c) => c.value(u,v,p),
+        }
+    }
 }
-impl Material for Emissive{
-    fn emission(&self) -> Vec3 {self.light}
+#[derive(Clone, Copy, Default)]
+struct SolidColor {color_value: Vec3,}
+impl Texture for SolidColor {fn value(&self, u: NumberType, v: NumberType, p: Vec3) -> Vec3 {self.color_value}}
+impl<'a> SolidColor {
+    fn new(color_value: Vec3) -> TextureEnum<'a> {TextureEnum::SolidColor(SolidColor {color_value})}
+}
+
+// no default 
+#[derive(Clone, Copy)]
+struct CheckerTexture<'a> {
+    odd: &'a TextureEnum<'a>,
+    even: &'a TextureEnum<'a>,
+}
+impl<'a> Texture for CheckerTexture<'a> {
+    fn value(&self, u: NumberType, v: NumberType, p: Vec3) -> Vec3 {
+        let fac = 50.0;//0.2;
+        //let sines = (fac*p.x).sin()*(fac*p.y).sin()*(fac*p.z).sin();
+        let sines = (fac*u).sin()*(fac*v).sin();
+        if sines < 0.0 {self.even.value(u,v,p)} else {self.odd.value(u,v,p)}
+    }
+}
+impl<'a> CheckerTexture<'a> {
+    fn new(odd: &'a TextureEnum<'a>, even: &'a TextureEnum<'a>) -> TextureEnum<'a> {
+        TextureEnum::CheckerTexture(CheckerTexture {odd,even,})
+    }
+    // inputting 2 arbitrary colors is not possible without allocation
 }
 
 //#[derive(Copy,Clone,Default)]
@@ -750,6 +896,123 @@ impl AABB {
     }
 }
 
+
+// Translate incoming ray for object 
+ 
+#[derive(Clone, Copy)]
+struct Translate<'a> {
+    offset: Vec3,
+    object: &'a HittableObject<'a>,
+}
+
+impl<'a> Hittable<'a> for Translate<'a> {
+
+    fn hit(&self, ray: &Ray, t_min: NumberType, t_max: NumberType, rec: &mut HitRecord<'a>) -> bool {
+        let moved = Ray{ro: ray.ro - self.offset, rd: ray.rd};
+        if !self.object.hit(&moved, t_min, t_max, rec) {return false;}
+        rec.p+=self.offset;
+        rec.set_face_normal(&moved, rec.n);
+        true
+    }
+    fn bounding_box(&self, aabb: &mut AABB) -> bool {
+        if !self.object.bounding_box(aabb) {return false;}
+        aabb.minimum += self.offset;
+        aabb.maximum += self.offset;
+        true
+    }
+}
+
+// TODO: replace with general transform?
+#[derive(Clone, Copy)]
+struct RotateY<'a> {
+    sin_theta: NumberType,
+    cos_theta: NumberType,
+    aabb: Option<AABB>,
+    object: &'a HittableObject<'a>,
+}
+impl<'a> RotateY<'a> {
+    fn new(object: &'a HittableObject<'a>, angle: NumberType) -> Self {
+        let radians = deg2rad(angle);
+        let sin_theta = radians.sin();
+        let cos_theta = radians.cos();
+        let mut aabb = AABB::default();
+        let has_box = object.bounding_box(&mut aabb);
+        let mut min = Vec3::one(NumberType::INFINITY);
+        let mut max = Vec3::one(-NumberType::INFINITY);
+        
+        let aabb_o: Option<AABB>;
+        if has_box {
+            for i in 0..2 {
+                for j in 0..2 {
+                    for k in 0..2 {
+                        let i = i as NumberType;
+                        let j = j as NumberType;
+                        let k = k as NumberType;
+                        let x = i*aabb.minimum.x + (1.0-i)*aabb.minimum.x;
+                        let y = j*aabb.minimum.x + (1.0-j)*aabb.minimum.z;
+                        let z = k*aabb.minimum.x + (1.0-k)*aabb.minimum.z;
+
+                        let newx = cos_theta*x + sin_theta*z;
+                        let newz = -sin_theta*x + cos_theta*z;
+
+                        let tester = Vec3::new(newx,y,newz);
+
+                        for c in 0..3 {
+                            min[c] = min[c].min(tester[c]);
+                            max[c] = max[c].max(tester[c]);
+                        }
+                    }
+                }
+            }
+            aabb_o = Some(aabb);
+        } else {aabb_o = None;}
+
+        RotateY {
+            sin_theta,
+            cos_theta,
+            aabb: aabb_o,
+            object,
+        }
+    }
+}
+impl<'a> Hittable<'a> for RotateY<'a> {
+    fn hit(&self, ray: &Ray, t_min: NumberType, t_max: NumberType, rec: &mut HitRecord<'a>) -> bool {
+        let mut ro = ray.ro;
+        let mut rd = ray.rd;
+
+        ro[0] = self.cos_theta*ray.ro[0] - self.sin_theta*ray.ro[2];
+        ro[2] = self.sin_theta*ray.ro[0] + self.cos_theta*ray.ro[2];
+
+        rd[0] = self.cos_theta*ray.rd[0] - self.sin_theta*ray.rd[2];
+        rd[2] = self.sin_theta*ray.rd[0] + self.cos_theta*ray.rd[2];
+
+        let rotated = Ray{ro,rd};
+
+        if !self.object.hit(&rotated, t_min, t_max, rec) {return false;}
+
+        let mut p = rec.p;
+        let mut n = rec.n;
+
+        p[0] = self.cos_theta*rec.p[0] + self.sin_theta*rec.p[2];
+        p[2] = -self.sin_theta*rec.p[0] + self.cos_theta*rec.p[2];
+
+        n[0] = self.cos_theta*rec.n[0] + self.sin_theta*rec.n[2];
+        n[2] = -self.sin_theta*rec.n[0] + self.cos_theta*rec.n[2];
+    
+        rec.p = p;
+        rec.set_face_normal(&rotated, n);
+
+        true
+    }
+
+    fn bounding_box(&self, aabb: &mut AABB) -> bool {
+        //TODO: AABB default
+        *aabb = self.aabb.unwrap_or(AABB::default());
+        self.aabb.is_some()
+    }
+}
+
+#[derive(Clone)]
 struct BVHnode<'a> {
     aabb: AABB,
     left: Rc<RefCell<HittableObject<'a>>>,
@@ -766,8 +1029,8 @@ impl<'a> Default for BVHnode<'a>{
         }
     }
 }
-impl<'a> Hittable for BVHnode<'a> {
-    fn hit(&self, ray: &Ray, t_min: NumberType, t_max: NumberType, rec: &mut HitRecord) -> bool {
+impl<'a> Hittable<'a> for BVHnode<'a> {
+    fn hit(&self, ray: &Ray, t_min: NumberType, t_max: NumberType, rec: &mut HitRecord<'a>) -> bool {
         if !self.aabb.hit(ray, t_min, t_max) {return false;}
         let hit_left = self.left.borrow_mut().hit(ray, t_min, t_max, rec);
         let hit_right = self.right.borrow_mut().hit(ray, t_min, if hit_left {rec.t} else {t_max}, rec);
@@ -782,7 +1045,7 @@ impl<'a> Hittable for BVHnode<'a> {
 }
 
 impl<'a> BVHnode<'a> {
-    fn box_val<T: Hittable + ?Sized>(a: &Rc<RefCell<T>>, axis: u8) -> NumberType
+    fn box_val<T: Hittable<'a> + ?Sized>(a: &Rc<RefCell<T>>, axis: u8) -> NumberType
     {
         let mut a_box = AABB::default();
         if !a.borrow_mut().bounding_box(&mut a_box) {panic!("missing implemenation for AABB");}
@@ -797,7 +1060,7 @@ impl<'a> BVHnode<'a> {
 
         println!("Axis: {axis}");
        
-        let x = move |a:&Rc<RefCell<HittableObject>>| OrderedFloat(Self::box_val(a,axis));
+        let x = move |a:&Rc<RefCell<HittableObject<'a>>>| OrderedFloat(Self::box_val(a,axis));
 
         let object_span = copy.len();
         println!("object_span = {object_span}");
@@ -855,23 +1118,56 @@ fn main() {
     
     
     let mut object_list: Vec<Rc<RefCell<HittableObject>>> = Vec::new();
+    let big_light = true;
 
-    let red   = MaterialEnum::Lambertian(Lambertian{albedo: Vec3::new(0.65,0.05,0.05)});
-    let white = MaterialEnum::Lambertian(Lambertian{albedo: Vec3::new(0.73,0.73,0.73)});
-    let green = MaterialEnum::Lambertian(Lambertian{albedo: Vec3::new(0.12,0.45,0.15)});
-    let light = MaterialEnum::Emissive(Emissive{light:Vec3::new(15.0,15.0,15.0)});
+    //let red   = MaterialEnum::Lambertian(Lambertian{albedo: Vec3::new(0.65,0.05,0.05)});
+    //let white = MaterialEnum::Lambertian(Lambertian{albedo: Vec3::new(0.73,0.73,0.73)});
+    //let green = MaterialEnum::Lambertian(Lambertian{albedo: Vec3::new(0.12,0.45,0.15)});
+    
+
+    let c1 = SolidColor::new(Vec3::one(0.8));
+    let c2 = SolidColor::new(Vec3::one(0.2));
+    let checker = 
+        CheckerTexture::new(& c1, & c2 );
+    let checker = Lambertian::new(checker);
+
+    //let glass = MaterialEnum::Dielectric(Dielectric{ir:1.5});
+    let white = checker;//Lambertian::col(Vec3::one(0.73));
+    let red = Lambertian::col(Vec3::new(0.65,0.05,0.05));
+    let green = Lambertian::col(Vec3::new(0.12,0.45,0.15));
+    let light = MaterialEnum::Emissive(Emissive{light:
+        if big_light {Vec3::new(6.0,6.0,6.0)}
+        else{Vec3::new(15.0,15.0,15.0)}});
     //let blue  = MaterialEnum::Lambertian(Lambertian{albedo: Vec3::new(0.12,0.12,0.45)});
     //let grey  = MaterialEnum::Lambertian(Lambertian{albedo: Vec3::new(0.73,0.73,0.73)*0.4});
     //let light_red = MaterialEnum::Emissive(Emissive{light:Vec3::new(7.0,0.0,0.0)});
     //let light_blue = MaterialEnum::Emissive(Emissive{light:Vec3::new(0.0,0.0,7.0)});
+  
+    //object_list.push(Rc::new(RefCell::new( HittableObject::Sphere(Sphere{material: glass, center: Vec3::one(250.0), radius: 100.0}))));
+    object_list.push(Rc::new(RefCell::new( HittableObject::Sphere(Sphere{material: white, center: Vec3::one(400.0), radius: 100.0}))));
+    object_list.push(Rc::new(RefCell::new( HittableObject::XZRect(
+                    if big_light {XZRect{material: light, x0: 113.0, x1: 443.0, z0: 127.0, z1: 432.0, k: 554.0, }}
+                    else {XZRect{material: light, x0: 213.0, x1: 343.0, z0: 227.0, z1: 332.0, k: 554.0, }}))));
 
     object_list.push(Rc::new(RefCell::new( HittableObject::YZRect(YZRect{material: green, y0: 0.0, y1: 555.0, z0: 0.0, z1: 555.0, k: 555.0, }))));
     object_list.push(Rc::new(RefCell::new( HittableObject::YZRect(YZRect{material: red, y0: 0.0, y1: 555.0, z0: 0.0, z1: 555.0, k: 0.0, }))));
-    object_list.push(Rc::new(RefCell::new( HittableObject::XZRect(XZRect{material: light, x0: 213.0, x1: 343.0, z0: 227.0, z1: 332.0, k: 554.0, }))));
     object_list.push(Rc::new(RefCell::new( HittableObject::XZRect(XZRect{material: white, x0: 0.0, x1: 555.0, z0: 0.0, z1: 555.0, k: 555.0, }))));
     object_list.push(Rc::new(RefCell::new( HittableObject::XZRect(XZRect{material: white, x0: 0.0, x1: 555.0, z0: 0.0, z1: 555.0, k: 0.0, }))));
     object_list.push(Rc::new(RefCell::new( HittableObject::XYRect(XYRect{material: white, x0: 0.0, x1: 555.0, y0: 0.0, y1: 555.0, k: 555.0, }))));
 
+    let cube = HittableObject::Cuboid(Cuboid::new(Vec3::one(0.0), Vec3::new(165.0,330.0,165.0), white));
+    let cube = HittableObject::RotateY(RotateY::new(&cube, 15.0));
+    let cube = HittableObject::Translate(Translate{object: &cube, offset: Vec3::new(265.0,0.0,295.0)});
+    object_list.push(Rc::new(RefCell::new(cube)));
+
+    let cube = HittableObject::Cuboid(Cuboid::new(Vec3::one(0.0), Vec3::one(165.0), white));
+    let cube = HittableObject::RotateY(RotateY::new(&cube, -18.0));
+    let cube = HittableObject::Translate(Translate{object: &cube, offset: Vec3::new(130.0,0.0,65.0)});
+    object_list.push(Rc::new(RefCell::new(cube)));
+
+
+    //object_list.push(Rc::new(RefCell::new( HittableObject::Cuboid(
+    //                Cuboid::new(Vec3::new(265.0,0.0,295.0), Vec3::new(430.0,330.0,460.0), white)))));
 
     //object_list.push(Rc::new(RefCell::new(
     //            XZRect{material: light, 
@@ -906,7 +1202,6 @@ fn main() {
     //                radius: 100.0,
     //                center: Vec3::new(555.0/2.0+100.0,555.0/2.0-100.0,555.0/2.0),
     //            } )));
-
     
     
     let mut rng = thread_rng();
@@ -956,8 +1251,8 @@ fn main() {
     for (x, y, pixel) in imgbuf.enumerate_pixels_mut() {
         if x==0 {let f = y as NumberType/imgy as NumberType * 100.0;println!("row {y}/{imgy}: {f}%");}
 
-        let samples   = 15;
-        let max_depth = 32;
+        let samples   = 4;//16;//32;//256;
+        let max_depth = 8;
 
         let mut col = Vec3::default();
 
