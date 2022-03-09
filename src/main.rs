@@ -215,7 +215,7 @@ fn ray_color(ray: &Ray, world: &dyn Hittable, depth: u32, acc: Vec3) -> Vec3 {
 
     let mut rec = HitRecord::default();
     if !world.hit(ray, 0.001, NumberType::INFINITY, &mut rec) {
-        return Vec3::one(0.05) // sky
+        return Vec3::one(0.01) // sky
     }
 
     let mut scattered = Ray::default();
@@ -250,11 +250,6 @@ trait Hittable {
     fn bounding_box(&self, _aabb: &mut AABB) -> bool {false}  
 }
 
-//struct BVHnode2<'a> {
-//    aabb: AABB,
-//    left: Option<&'a BVHnode2<'a>>,
-////    right: &'a BVH,
-//}
 
 //impl Default for BVHnode2<'_> {fn default() -> Self {BVHnode2::Tail}}
 //impl BVHnode2<'a> {
@@ -263,21 +258,16 @@ trait Hittable {
 //    } 
 //}
 
-//struct BVHnode {
-//    aabb: AABB,
-//    left: Rc<RefCell<dyn Hittable>>,
-//    right: Rc<RefCell<dyn Hittable>>,
-//}
-enum HittableObject {
+enum HittableObject<'a> {
     Sphere(Sphere),
     BVHnode(BVHnode),
     XYRect(XYRect),
     XZRect(XZRect),
     YZRect(YZRect),
-    ConstantMedium(ConstantMedium),
+    ConstantMedium(ConstantMedium<'a>),
 }
 
-impl Hittable for HittableObject
+impl<'a> Hittable for HittableObject<'a>
 {
     fn hit(&self, ray: &Ray, t_min: NumberType, t_max: NumberType, rec: &mut HitRecord) -> bool {
         match self {
@@ -478,13 +468,29 @@ impl Hittable for Sphere {
     }
 }
 
-struct ConstantMedium {
+//struct Cuboid {
+//    center: Vec3,
+//    dim: Vec3,
+//    material: MaterialEnum
+//}
+//
+//impl Hittable for Cuboid {
+//    fn hit(&self, ray: &Ray, t_min: NumberType, t_max: NumberType, rec: &mut HitRecord) -> bool
+//    {
+//        let m = Vec3::new(1.0/ray.rd.x, 1.0/ray.rd.y, 1.0/ray.rd.z);
+//        
+//
+//        true
+//    }
+//}
+
+struct ConstantMedium<'a> {
     neg_inv_denisty: NumberType,
-    boundary: Rc<RefCell<HittableObject>>,
+    boundary: &'a HittableObject<'a>,
     material: MaterialEnum,
 }
 
-impl Hittable for ConstantMedium {
+impl<'a> Hittable for ConstantMedium<'a> {
     fn hit(&self, ray: &Ray, t_min: NumberType, t_max: NumberType, rec: &mut HitRecord) -> bool
     {
         let enable_debug = false;
@@ -493,20 +499,22 @@ impl Hittable for ConstantMedium {
         let mut rec1 = HitRecord::default();
         let mut rec2 = HitRecord::default();
 
-        if !self.boundary.borrow().hit(ray, -NumberType::INFINITY, NumberType::INFINITY, &mut rec1) {return false;}
-        if !self.boundary.borrow().hit(ray, rec1.t+0.0001, NumberType::INFINITY, &mut rec2) {return false;}
-
-
-        rec1.t = rec1.t.max(t_min);
-        rec2.t = rec2.t.max(t_max);
+        if !self.boundary.hit(ray, -NumberType::INFINITY, NumberType::INFINITY, &mut rec1) {return false;}
+        if !self.boundary.hit(ray, rec1.t+0.0001, NumberType::INFINITY, &mut rec2) {return false;}
+        
+        if debugging {println!("t_min: {t_min}, t_max: {t_max}");}
+        
+        if rec1.t<t_min {rec1.t = t_min}
+        if rec2.t>t_max {rec2.t = t_max}
         
         if rec1.t >= rec2.t {return false;}
+        
+        if rec1.t<0.0 {rec1.t=0.0;}
 
-        rec1.t = rec1.t.max(0.0);
 
         let raylen = ray.rd.length();
         let dist_in_boundary = (rec2.t-rec1.t)*raylen;
-        let hit_dist = self.neg_inv_denisty*random_val();
+        let hit_dist = self.neg_inv_denisty*random_val().ln();
         
         if hit_dist>dist_in_boundary {return false;}
 
@@ -515,12 +523,10 @@ impl Hittable for ConstantMedium {
 
         rec.n = Vec3::new(1.0,0.0,0.0);
         rec.material = self.material;
-
-
         true
     }
     fn bounding_box(&self,  aabb: &mut AABB) -> bool {
-        self.boundary.borrow().bounding_box(aabb)
+        self.boundary.bounding_box(aabb)
     }
 
 }
@@ -539,6 +545,8 @@ impl Material for Isotropic {
 
 trait Material {
     fn scatter(&self,_ray: &Ray, _rec: &HitRecord, _attenuation: &mut Vec3, _sray: &mut Ray) -> bool {false}
+//    fn scatter(&self,_ray: &Ray, _rec: &HitRecord, _attenuation: &mut Vec3, _sray: &mut Ray) -> bool {false}
+//    fn scattering_pdf(&self, ray, 
     fn emission(&self) -> Vec3 {Vec3::one(0.0)}
 }
 
@@ -832,7 +840,7 @@ impl BVHnode {
 
 fn main() {
     let aspect_ratio = 1.0;//16.0/9.0;
-    let imgx         = 200;
+    let imgx         = 600;
     let imgy         = ((imgx as NumberType)/aspect_ratio) as u32;
 
     let mut imgbuf = image::ImageBuffer::new(imgx, imgy);
@@ -841,167 +849,87 @@ fn main() {
     let mut object_list: Vec<Rc<RefCell<dyn Hittable>>> = Vec::new();
 
     let red   = MaterialEnum::Lambertian(Lambertian{albedo: Vec3::new(0.65,0.05,0.05)});
-    let blue  = MaterialEnum::Lambertian(Lambertian{albedo: Vec3::new(0.12,0.12,0.45)});
     let white = MaterialEnum::Lambertian(Lambertian{albedo: Vec3::new(0.73,0.73,0.73)});
-    let grey  = MaterialEnum::Lambertian(Lambertian{albedo: Vec3::new(0.73,0.73,0.73)*0.4});
     let green = MaterialEnum::Lambertian(Lambertian{albedo: Vec3::new(0.12,0.45,0.15)});
-    let light = MaterialEnum::Emissive(Emissive{light:Vec3::new(7.0,7.0,7.0)});
-    let light_red = MaterialEnum::Emissive(Emissive{light:Vec3::new(7.0,0.0,0.0)});
-    let light_blue = MaterialEnum::Emissive(Emissive{light:Vec3::new(0.0,0.0,7.0)});
+    let light = MaterialEnum::Emissive(Emissive{light:Vec3::new(15.0,15.0,15.0)});
+    //let blue  = MaterialEnum::Lambertian(Lambertian{albedo: Vec3::new(0.12,0.12,0.45)});
+    //let grey  = MaterialEnum::Lambertian(Lambertian{albedo: Vec3::new(0.73,0.73,0.73)*0.4});
+    //let light_red = MaterialEnum::Emissive(Emissive{light:Vec3::new(7.0,0.0,0.0)});
+    //let light_blue = MaterialEnum::Emissive(Emissive{light:Vec3::new(0.0,0.0,7.0)});
+
+    object_list.push(Rc::new(RefCell::new( YZRect{material: green, y0: 0.0, y1: 555.0, z0: 0.0, z1: 555.0, k: 555.0, })));
+    object_list.push(Rc::new(RefCell::new( YZRect{material: red, y0: 0.0, y1: 555.0, z0: 0.0, z1: 555.0, k: 0.0, })));
+    object_list.push(Rc::new(RefCell::new( XZRect{material: light, x0: 213.0, x1: 343.0, z0: 227.0, z1: 332.0, k: 554.0, })));
+    object_list.push(Rc::new(RefCell::new( XZRect{material: white, x0: 0.0, x1: 555.0, z0: 0.0, z1: 555.0, k: 555.0, })));
+    object_list.push(Rc::new(RefCell::new( XZRect{material: white, x0: 0.0, x1: 555.0, z0: 0.0, z1: 555.0, k: 0.0, })));
+    object_list.push(Rc::new(RefCell::new( XYRect{material: white, x0: 0.0, x1: 555.0, y0: 0.0, y1: 555.0, k: 555.0, })));
 
 
-//    object_list.push(Rc::new(RefCell::new(
-//                YZRect{material: green,
-//                    y0: 0.0,
-//                    y1: 555.0,
-//                    z0: 0.0, 
-//                    z1: 555.0,
-//                    k:  555.0, 
-//                })));
+    object_list.push(Rc::new(RefCell::new(
+                XZRect{material: light, 
+                    x0: 123.0,
+                    x1: 423.0,
+                    z0: 147.0, 
+                    z1: 412.0,
+                    k:  554.0, 
+                })));
+    
+//    let material = Isotropic{albedo: Vec3::one(0.5)};
+//    let fog_sphere = Rc::new(RefCell::new(
+//            HittableObject::Sphere(
+//                Sphere{
+//                    material: white,
+//                    radius: 5000.0,
+//                    center: Vec3::one(0.0),
+//                } )));
 //
-//    object_list.push(Rc::new(RefCell::new(
-//                YZRect{material: red, 
-//                    y0: 0.0,
-//                    y1: 555.0,
-//                    z0: 0.0, 
-//                    z1: 555.0,
-//                    k:  0.0, 
-//                })));
-
-    let of = 130.0;
-    let sc = 50.0;
-    let mi = 050.0;
-    object_list.push(Rc::new(RefCell::new(
-                XZRect{material: light, 
-                    x0: 113.0-of+mi,
-                    x1: 443.0-of-mi,
-                    z0: 127.0-sc, 
-                    z1: 432.0+sc,
-                    k:  554.0, 
-                })));
+//    let fog_sphere = Rc::new(RefCell::new(
+//                ConstantMedium{
+//                    material: MaterialEnum::Isotropic(material),
+//                    boundary: fog_sphere,
+//                    neg_inv_denisty: -1.0/0.0001,
+//                } ));
+//    object_list.push(fog_sphere);
     
-    let of = -of;
-    object_list.push(Rc::new(RefCell::new(
-                XZRect{material: light, 
-                    x0: 113.0-of+mi,
-                    x1: 443.0-of-mi,
-                    z0: 127.0-sc, 
-                    z1: 432.0+sc,
-                    k:  554.0, 
-                })));
-    
-////    object_list.push(Rc::new(RefCell::new(
-////                XZRect{material: white, 
-////                    x0: 0.0,
-////                    x1: 555.0,
-////                    z0: 0.0, 
-////                    z1: 555.0,
-////                    k:  0.0, 
-////                })));
-////
-////    object_list.push(Rc::new(RefCell::new(
-////                XZRect{material: white, 
-////                    x0: 0.0,
-////                    x1: 555.0,
-////                    z0: 0.0, 
-////                    z1: 555.0,
-////                    k:  555.0, 
-////                })));
-////
-////    object_list.push(Rc::new(RefCell::new(
-////                XYRect{material: white, 
-////                    x0: 0.0,
-////                    x1: 555.0,
-////                    y0: 0.0, 
-////                    y1: 555.0,
-////                    k:  555.0, 
-////                })));
-    let material = Isotropic{albedo: Vec3::one(0.0)};
-    let fog_sphere = Rc::new(RefCell::new(
-            HittableObject::Sphere(
-                Sphere{
-                    material: white,
-                    radius: 200.0,
-                    center: Vec3::new(555.0/2.0-100.0,555.0/2.0+100.0,555.0/2.0),
-                } )));
-
-    let fog_sphere = Rc::new(RefCell::new(
-                ConstantMedium{
-                    material: MaterialEnum::Isotropic(material),
-                    boundary: fog_sphere,
-                    neg_inv_denisty: 0.001,
-                } ));
-    object_list.push(fog_sphere);
-    
-    let material = Metal{albedo: Vec3::new(0.5,0.7,0.2),blur: 0.0};
+    let material = Lambertian{albedo: Vec3::new(0.5,0.7,0.2)};
     object_list.push(Rc::new(RefCell::new(
                 Sphere{
-                    material: MaterialEnum::Metal(material),
+                    material: MaterialEnum::Lambertian(material),
                     radius: 100.0,
                     center: Vec3::new(555.0/2.0+100.0,555.0/2.0-100.0,555.0/2.0),
                 } )));
 
-    //let material = Lambertian{albedo: Vec3::new(0.6,0.3,0.5)};
-    //object_list.push(Rc::new(RefCell::new(
-    //            Sphere{
-    //                material: MaterialEnum::Lambertian(material),
-    //                radius: 1000.0,
-    //                center: Vec3::new(0.0,-1000.0,0.0),
-    //            } )));
-    //
-    //object_list.push(Rc::new(RefCell::new(
-    //            Sphere{
-    //                material: MaterialEnum::Lambertian(material),
-    //                radius: 2.0,
-    //                center: Vec3::new(0.0,2.0,0.0),
-    //            } )));
-
-
-
-    //let material = Lambertian{albedo:Vec3::new(0.4,0.2,0.1)};
-    //object_list.push(Rc::new(RefCell::new(Sphere {material: MaterialEnum::Lambertian(material), radius: 1.0,center: Vec3::new(0.0,  1.0,0.0)})));
-    //let material = Dielectric{ir:1.5};
-    //object_list.push(Rc::new(RefCell::new(Sphere {material: MaterialEnum::Dielectric(material), radius: 1.0,center: Vec3::new(-4.0, 1.0,0.0)})));
-    //let material = Metal{albedo:Vec3::new(0.7,0.6,0.5), blur:0.0};
-    //object_list.push(Rc::new(RefCell::new(Sphere {material: MaterialEnum::Metal(material), radius: 1.0,center: Vec3::new(4.0,  1.0,0.0)})));
     
     
     let mut rng = thread_rng();
 
     if false { 
-        let wid = 8;
-        let sc = 2.0;
-        for a in -wid..wid {
-            for b in -wid..wid {
-                let rad = random_range(0.1,0.3);
-                let center = Vec3::new((a as NumberType + 0.9*random_val())*sc, random_range(-1.0,1.0)*5.0, (b as NumberType + 0.9*random_val())*sc);
-                if (center-Vec3::new(4.0,0.5,0.0)).length() > 0.9
-                {
-                    let choose_mat = random_val();
+        for i in 0..10 {
+            let rad = 50.0;
+            let center = Vec3::new(random_range(0.0,350.0),random_range(0.0,350.0),random_range(0.0,350.0));
+            let choose_mat = random_val();
 
-                    if choose_mat < 0.25 {
-                        let albedo = Vec3::random();
-                        let material = MaterialEnum::Lambertian(Lambertian {albedo});
-                        object_list.push(Rc::new(RefCell::new(Sphere{material, radius: rad, center})));
-                    }
-                    else if choose_mat < 0.5 {
-                        let light = Vec3::random()*4.0;
-                        let material = MaterialEnum::Emissive(Emissive{light});
-                        object_list.push(Rc::new(RefCell::new(Sphere{material: material.clone(), radius: rad, center})));
-                    }
-                    else if choose_mat < 0.75{
-                        let albedo = Vec3::random();
-                        let blur = random_range(0.0,0.5);
-                        let material = MaterialEnum::Metal(Metal{albedo,blur});
-                        object_list.push(Rc::new(RefCell::new(Sphere{material: material.clone(), radius: rad, center})));
-                    }
-                    else {
-                        let material = MaterialEnum::Dielectric(Dielectric{ir:1.5});
-                        object_list.push(Rc::new(RefCell::new(Sphere{material: material.clone(), radius: rad, center})));
-                    }
-
-                }
+            if choose_mat < 0.5 {
+                let albedo = Vec3::random();
+                let material = MaterialEnum::Lambertian(Lambertian {albedo});
+                object_list.push(Rc::new(RefCell::new(Sphere{material, radius: rad, center})));
             }
+            //else if choose_mat < 0.5 {
+            //    let light = Vec3::random()*4.0;
+            //    let material = MaterialEnum::Emissive(Emissive{light});
+            //    object_list.push(Rc::new(RefCell::new(Sphere{material: material.clone(), radius: rad, center})));
+            //}
+            else if choose_mat < 0.75{
+                let albedo = Vec3::random();
+                let blur = random_range(0.0,0.5);
+                let material = MaterialEnum::Metal(Metal{albedo,blur});
+                object_list.push(Rc::new(RefCell::new(Sphere{material: material.clone(), radius: rad, center})));
+            }
+            else {
+                let material = MaterialEnum::Dielectric(Dielectric{ir:1.5});
+                object_list.push(Rc::new(RefCell::new(Sphere{material: material.clone(), radius: rad, center})));
+            }
+
         }
     }
     let mut bvh = BVHnode::default();
@@ -1013,13 +941,14 @@ fn main() {
     //let cam = Camera::new(Vec3::new(13.0,2.0,3.0), Vec3::new(0.0,0.0,0.0), Vec3::new(0.0,1.0,0.0), 45.0, aspect_ratio);
     //let cam = Camera::new(Vec3::new(26.0,3.0,6.0), Vec3::new(0.0,2.0,0.0), Vec3::new(0.0,1.0,0.0), 20.0, aspect_ratio);
     let cam = Camera::new(Vec3::new(278.0,278.0,-800.0), Vec3::new(278.0,278.0,0.0), Vec3::new(0.0,1.0,0.0), 40.0, aspect_ratio);
+    //let cam = Camera::new(Vec3::new(478.0,278.0,-600.0), Vec3::new(278.0,278.0,0.0), Vec3::new(0.0,1.0,0.0), 40.0, aspect_ratio);
     
     let start = Instant::now();
 
     for (x, y, pixel) in imgbuf.enumerate_pixels_mut() {
         if x==0 {let f = y as NumberType/imgy as NumberType * 100.0;println!("row {y}/{imgy}: {f}%");}
 
-        let samples   = 50;
+        let samples   = 15;
         let max_depth = 32;
 
         let mut col = Vec3::default();
