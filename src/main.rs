@@ -180,26 +180,32 @@ where
 }
 
 impl Vec3 {
-    fn random() -> V3<NumberType>
-    {
+    fn random() -> V3<NumberType> {
         V3::new(random_val(), random_val(), random_val()) 
     }
-    fn random_range(a: NumberType, b:NumberType) -> V3<NumberType>
-    {
+    fn random_range(a: NumberType, b:NumberType) -> V3<NumberType> {
         let mut q = rand::thread_rng();  
         V3::new(q.gen_range(a..b), q.gen_range(a..b), q.gen_range(a..b)) 
     }
-    fn random_unit() -> V3<NumberType>
-    {
+    fn random_unit() -> V3<NumberType> {
         Self::random_range(-1.0,1.0).normalized()
     }
-    fn random_in_unit_hemisphere(n:Vec3) -> V3<NumberType>
-    {
+    fn random_in_unit_hemisphere(n:Vec3) -> V3<NumberType> {
         let r = Self::random_unit();
         if r.dot(n)>0.0 {r} else {-r}
     }
-    fn refract(self, n: Vec3, etiot: NumberType) -> Vec3
-    {
+    fn random_cosine_direction() -> Vec3 {
+        let r1 = random_val();
+        let r2 = random_val();
+        let z = (1.0-r2).sqrt();
+
+        let phi = 2.0*PI*r1;
+        let x = phi.cos()*r2.sqrt();
+        let y = phi.sin()*r2.sqrt();
+
+        Vec3::new(x,y,z)
+    }
+    fn refract(self, n: Vec3, etiot: NumberType) -> Vec3 {
         let cos_theta = -self.dot(n).min(1.0);
         let r_out_prep = (self + n*cos_theta)*etiot;
         let r_out_parallel = n*(-(1.0 - r_out_prep.dot2()).abs().sqrt());
@@ -236,12 +242,19 @@ fn ray_color(ray: &Ray, world: &HittableObject, depth: u32, acc: Vec3) -> Vec3 {
     }
 
     let mut scattered = Ray::default();
-    let mut attenuation = Vec3::one(0.0);
     let emitted = rec.material.emission();
+    let mut pdf = 0.0;
+    let mut albedo = Vec3::one(0.0);
 
-    if !rec.material.scatter(ray, &rec, &mut attenuation, &mut scattered) {return emitted;}
+    if !rec.material.scatter(ray, &rec, &mut albedo, &mut scattered, &mut pdf) {return emitted;}
+   
+    let p = CosinePDF::new(rec.n);
+    scattered = Ray{ro: rec.p, rd: p.generate()};
+    pdf = p.value(scattered.rd);
 
-    return emitted + attenuation*ray_color(&scattered, world, depth-1, acc);
+    return emitted 
+        + albedo*rec.material.scattering_pdf(ray, &rec, &scattered)
+        *ray_color(&scattered, world, depth-1, acc)/pdf;
 }
 
 
@@ -618,17 +631,17 @@ impl<'a> Hittable<'a> for ConstantMedium<'a> {
 
 }
 
-#[derive(Copy,Clone)]
-struct Isotropic {
-    albedo: Vec3,
-}
-impl Material for Isotropic {
-    fn scatter(&self,_ray: &Ray, rec: &HitRecord, attenuation: &mut Vec3, sray: &mut Ray) -> bool {
-        *sray = Ray {ro: rec.p, rd:Vec3::random_unit()};
-        *attenuation = self.albedo;
-        true 
-    }
-}
+//#[derive(Copy,Clone)]
+//struct Isotropic {
+//    albedo: Vec3,
+//}
+//impl Material for Isotropic {
+//    fn scatter(&self,_ray: &Ray, rec: &HitRecord, attenuation: &mut Vec3, sray: &mut Ray, pdf: &mut NumberType) -> bool {
+//        *sray = Ray {ro: rec.p, rd:Vec3::random_unit()};
+//        *attenuation = self.albedo;
+//        true 
+//    }
+//}
 
 
 
@@ -638,13 +651,37 @@ struct Lambertian<'a> {
     texture: TextureEnum<'a>,
 }
 impl<'a> Material for Lambertian<'a> {
-    fn scatter(&self,_ray: &Ray, rec: &HitRecord, attenuation: &mut Vec3, sray: &mut Ray) -> bool
+    fn scatter(&self,_ray: &Ray, rec: &HitRecord, albedo: &mut Vec3, sray: &mut Ray, pdf: &mut NumberType) -> bool
     {
+
         //sray.rd.set(rec.n + Vec3::random_unit());//Vec3::random_in_unit_hemisphere(rec.n));
-        sray.rd.set(Vec3::random_in_unit_hemisphere(rec.n));
-        sray.ro.set(rec.p);
-        *attenuation = self.texture.value(rec.u,rec.v,rec.p);
+        //sray.rd.set(Vec3::random_in_unit_hemisphere(rec.n));
+        //sray.ro.set(rec.p);
+        //*attenuation = self.texture.value(rec.u,rec.v,rec.p);
+        
+        
+        //sray.rd = (rec.n + Vec3::random_unit()).normalized();
+        //sray.ro = rec.p;
+        //*albedo = self.texture.value(rec.u, rec.v, rec.p);
+        //*pdf = rec.n.dot(sray.rd)/PI;
+        
+        //sray.rd = Vec3::random_in_unit_hemisphere(rec.n);
+        //sray.ro = rec.p;
+        //*albedo = self.texture.value(rec.u, rec.v, rec.p);
+        //*pdf = 0.5/PI;
+        
+        let onb = ONB::build_from_w(rec.n);
+
+        sray.rd = onb.local(Vec3::random_cosine_direction()).normalized();
+        sray.ro = rec.p;
+        *albedo = self.texture.value(rec.u, rec.v, rec.p);
+        *pdf = onb.w.dot(sray.rd)/PI;
         true
+    }
+    fn scattering_pdf(&self, ray: &Ray, rec: &HitRecord, sray: &Ray) -> NumberType {
+        let cosine = rec.n.dot(sray.rd.normalized());
+        if cosine < 0.0 {0.0} else {cosine/PI}
+        //(cosine/PI).abs()
     }
 }
 impl<'a> Lambertian<'a> {
@@ -667,9 +704,10 @@ impl Material for Emissive{
 }
 
 trait Material {
-    fn scatter(&self,_ray: &Ray, _rec: &HitRecord, _attenuation: &mut Vec3, _sray: &mut Ray) -> bool {false}
-//    fn scatter(&self,_ray: &Ray, _rec: &HitRecord, _attenuation: &mut Vec3, _sray: &mut Ray) -> bool {false}
-//    fn scattering_pdf(&self, ray, 
+    fn scatter(&self,_ray: &Ray, _rec: &HitRecord, _albedo: &mut Vec3, _scattered: &mut Ray, pdf: &mut NumberType) -> bool {false}
+
+    fn scattering_pdf(&self, _ray: &Ray, _rec: &HitRecord, _sray: &Ray) -> NumberType {0.0}//TODO
+
     fn emission(&self) -> Vec3 {Vec3::one(0.0)}
 }
 
@@ -690,11 +728,11 @@ impl<'a> Default for MaterialEnum<'a> {
 
 impl<'a> Material for MaterialEnum<'a>
 {
-    fn scatter(&self,ray: &Ray, rec: &HitRecord, attenuation: &mut Vec3, sray: &mut Ray) -> bool
+    fn scatter(&self,ray: &Ray, rec: &HitRecord, attenuation: &mut Vec3, sray: &mut Ray, pdf: &mut NumberType) -> bool
     {
         match self {
-            MaterialEnum::Lambertian(l) => l.scatter(ray, rec, attenuation, sray),
-            MaterialEnum::Emissive(e) => e.scatter(ray, rec, attenuation, sray),
+            MaterialEnum::Lambertian(l) => l.scatter(ray, rec, attenuation, sray, pdf),
+            MaterialEnum::Emissive(e) => e.scatter(ray, rec, attenuation, sray, pdf),
             //MaterialEnum::Metal(m) => m.scatter(ray, rec, attenuation, sray),
             //MaterialEnum::Dielectric(d) => d.scatter(ray, rec, attenuation, sray),
             //MaterialEnum::Isotropic(i) => i.scatter(ray, rec, attenuation, sray),
@@ -707,6 +745,12 @@ impl<'a> Material for MaterialEnum<'a>
             //MaterialEnum::Metal(m) => m.emission(),
             //MaterialEnum::Dielectric(d) => d.emission(),
             //MaterialEnum::Isotropic(i) => i.emission(),
+        }
+    }
+    fn scattering_pdf(&self, _ray: &Ray, _rec: &HitRecord, _sray: &Ray) -> NumberType {
+        match self {
+            MaterialEnum::Lambertian(l) => l.scattering_pdf(_ray, _rec, _sray),
+            MaterialEnum::Emissive(e) => e.scattering_pdf(_ray, _rec, _sray),
         }
     }
 }
@@ -1109,6 +1153,49 @@ impl<'a> BVHnode<'a> {
     }
 }
 
+struct ONB {
+    u: Vec3,
+    v: Vec3,
+    w: Vec3,
+}
+impl ONB {
+    fn local(&self,p: Vec3)->Vec3 {
+        self.u*p.x+self.v*p.y+self.w*p.z
+    }
+    fn build_from_w(n: Vec3) -> Self {
+        let w = n.normalized();
+        let a = if w.x.abs() > 0.9 {Vec3::new(0.0,1.0,0.0)} else {Vec3::new(1.0,0.0,0.0)};
+        let v = w.cross(a).normalized();
+        let u = w.cross(v);
+        ONB {u,v,w}
+    }
+}
+
+trait PDF {
+    fn value (&self, direction: Vec3) -> NumberType;//{0.0}
+    fn generate(&self) -> Vec3;//{Vec3::default()}
+}
+
+struct CosinePDF {
+    onb: ONB
+}
+
+impl PDF for CosinePDF {
+    fn value (&self, direction: Vec3) -> NumberType {
+        let cosine = direction.normalized().dot(self.onb.w);
+        if cosine < 0.0 {0.0} else {cosine/PI}
+    }
+    fn generate(&self) -> Vec3 {
+        self.onb.local(Vec3::random_cosine_direction())
+    }
+}
+
+impl CosinePDF {
+    fn new(w: Vec3) -> Self {
+        CosinePDF { onb: ONB::build_from_w(w)}
+    }
+}
+
 fn main() {
     let aspect_ratio = 1.0;//16.0/9.0;
     let imgx         = 600;
@@ -1118,7 +1205,7 @@ fn main() {
     
     
     let mut object_list: Vec<Rc<RefCell<HittableObject>>> = Vec::new();
-    let big_light = true;
+    let big_light = false;
 
     //let red   = MaterialEnum::Lambertian(Lambertian{albedo: Vec3::new(0.65,0.05,0.05)});
     //let white = MaterialEnum::Lambertian(Lambertian{albedo: Vec3::new(0.73,0.73,0.73)});
@@ -1132,11 +1219,11 @@ fn main() {
     let checker = Lambertian::new(checker);
 
     //let glass = MaterialEnum::Dielectric(Dielectric{ir:1.5});
-    let white = checker;//Lambertian::col(Vec3::one(0.73));
+    let white = Lambertian::col(Vec3::one(0.73));
     let red = Lambertian::col(Vec3::new(0.65,0.05,0.05));
     let green = Lambertian::col(Vec3::new(0.12,0.45,0.15));
     let light = MaterialEnum::Emissive(Emissive{light:
-        if big_light {Vec3::new(6.0,6.0,6.0)}
+        if big_light {Vec3::new(4.0,4.0,4.0)}
         else{Vec3::new(15.0,15.0,15.0)}});
     //let blue  = MaterialEnum::Lambertian(Lambertian{albedo: Vec3::new(0.12,0.12,0.45)});
     //let grey  = MaterialEnum::Lambertian(Lambertian{albedo: Vec3::new(0.73,0.73,0.73)*0.4});
@@ -1251,7 +1338,7 @@ fn main() {
     for (x, y, pixel) in imgbuf.enumerate_pixels_mut() {
         if x==0 {let f = y as NumberType/imgy as NumberType * 100.0;println!("row {y}/{imgy}: {f}%");}
 
-        let samples   = 4;//16;//32;//256;
+        let samples   = 32;//16;//32;//256;
         let max_depth = 8;
 
         let mut col = Vec3::default();
