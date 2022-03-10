@@ -8,14 +8,16 @@ edition = "2021"
 [dependencies]
 image = "*"
 num-traits = "*"
-rand = "*"
+rand = {version = "*", features = ["small_rng"]}
 lazy_static = "*"
 mut_static = "*"
 smallvec = "*"
 ordered-float = "*"
+rand_distr = "*"
+micromath = "*"
 
-#[rust]
-#debuginfo-level = 1
+[rust]
+debuginfo-level = 1
 
 [profile.release]
 #debug = 1

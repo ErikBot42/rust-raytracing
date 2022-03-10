@@ -1,3 +1,4 @@
+
 extern crate image;
 extern crate lazy_static;
 extern crate rand;
@@ -5,14 +6,34 @@ extern crate smallvec;
 
 //DivAssign,MulAssign
 use std::ops::{Add, AddAssign, Div, Mul, Neg, Sub, SubAssign, Index, IndexMut};
-use rand::{Rng,thread_rng};
+use rand::{Rng, SeedableRng};
+use rand::rngs::SmallRng;
 use rand_distr::StandardNormal;
 use num_traits::real::Real;
-use std::rc::Rc;
+//use std::rc::Rc;
 use std::mem;
 use ordered_float::OrderedFloat;
 use std::cell::RefCell;
 use std::time::Instant;
+//use micromath::F32Ext;
+use std::thread;
+use std::sync::{Arc,Mutex};
+
+static mut RNG: Option<SmallRng> = None;
+fn rng_seed() {
+    unsafe {
+        RNG = Some(SmallRng::from_entropy());
+    }
+}
+fn rng() -> &'static mut SmallRng{
+    unsafe {
+        RNG.as_mut().unwrap()
+    }
+}
+
+//fn rng() -> ThreadRng {
+//    thread_rng()
+//}
 
 
 #[derive(Debug, Copy, Clone, Default)]
@@ -196,11 +217,11 @@ impl Vec3 {
     //}
     //
     fn random_dir() -> Vec3 {
-        let mut rng = thread_rng();
-        Vec3::new(rng.sample(StandardNormal),
-        rng.sample(StandardNormal),
-        rng.sample(StandardNormal)
-        )
+        Vec3::new(
+            rng().sample(StandardNormal),
+            rng().sample(StandardNormal),
+            rng().sample(StandardNormal)
+            )
     } 
     fn random_unit() -> Vec3 {
         Vec3::random_dir().normalized()
@@ -234,23 +255,25 @@ impl Vec3 {
 
     //    //rand::distributions::Normal
     //}
-    fn refract(self, n: Vec3, etiot: NumberType) -> Vec3 {
-        let cos_theta = -self.dot(n).min(1.0);
-        let r_out_prep = (self + n*cos_theta)*etiot;
-        let r_out_parallel = n*(-(1.0 - r_out_prep.dot2()).abs().sqrt());
-        r_out_prep+r_out_parallel
-    }
+    //fn refract(self, n: Vec3, etiot: NumberType) -> Vec3 {
+    //    let cos_theta = -self.dot(n).min(1.0);
+    //    let r_out_prep = (self + n*cos_theta)*etiot;
+    //    let r_out_parallel = n*(-(1.0 - r_out_prep.dot2()).abs().sqrt());
+    //    r_out_prep+r_out_parallel
+    //}
 }
 
 
 
-type NumberType = f64;
+type NumberType = f32;
 type Vec3 = V3<NumberType>;
 
 fn random_range(a: NumberType, b:NumberType) -> NumberType {
-    let a: NumberType = rand::thread_rng().gen_range(a..b);a
+    let a: NumberType = rng().gen_range(a..b);a
 }
-fn random_val() -> NumberType {let a: NumberType = rand::thread_rng().gen();a}
+
+
+fn random_val() -> NumberType {let a: NumberType = rng().gen();a}
 
 #[derive(Debug, Default)]
 struct Ray {
@@ -901,8 +924,6 @@ struct CheckerTexture<'a> {
 impl<'a> Texture for CheckerTexture<'a> {
     fn value(&self, u: NumberType, v: NumberType, p: Vec3) -> Vec3 {
         let fac = 8.0;//0.2;
-        //let sines = (fac*p.x).sin()*(fac*p.y).sin()*(fac*p.z).sin();
-        //let sines = (fac*u).sin()*(fac*v).sin();
         let sines = ((u*fac).fract()*2.0-1.0)*((v*fac).fract()*2.0-1.0);
         if sines < 0.0 {self.even.value(u,v,p)} else {self.odd.value(u,v,p)}
     }
@@ -1168,8 +1189,8 @@ impl<'a> Hittable<'a> for RotateY<'a> {
 #[derive(Clone)]
 struct BVHnode<'a> {
     aabb: AABB,
-    left: Rc<RefCell<HittableObject<'a>>>,
-    right: Rc<RefCell<HittableObject<'a>>>,
+    left: Arc<Mutex<HittableObject<'a>>>,
+    right: Arc<Mutex<HittableObject<'a>>>,
 }
 
 impl<'a> Default for BVHnode<'a>{
@@ -1177,16 +1198,16 @@ impl<'a> Default for BVHnode<'a>{
         BVHnode
         {
             aabb: AABB::default(),
-            left: Rc::new(RefCell::new(HittableObject::default())),
-            right: Rc::new(RefCell::new(HittableObject::default())),
+            left: Arc::new(Mutex::new(HittableObject::default())),
+            right: Arc::new(Mutex::new(HittableObject::default())),
         }
     }
 }
 impl<'a> Hittable<'a> for BVHnode<'a> {
     fn hit(&self, ray: &Ray, ray_t: Interval, rec: &mut HitRecord<'a>) -> bool {
         if !self.aabb.hit(ray, ray_t.min, ray_t.max) {return false;}
-        let hit_left = self.left.borrow_mut().hit(ray, ray_t, rec);
-        let hit_right = self.right.borrow_mut().hit(ray, Interval::new(ray_t.min, if hit_left {rec.t} else {ray_t.max}), rec);
+        let hit_left = self.left.lock().unwrap().hit(ray, ray_t, rec);
+        let hit_right = self.right.lock().unwrap().hit(ray, Interval::new(ray_t.min, if hit_left {rec.t} else {ray_t.max}), rec);
         return hit_left || hit_right;
     }
     fn bounding_box(&self, aabb: &mut AABB) -> bool {
@@ -1198,22 +1219,22 @@ impl<'a> Hittable<'a> for BVHnode<'a> {
 }
 
 impl<'a> BVHnode<'a> {
-    fn box_val<T: Hittable<'a> + ?Sized>(a: &Rc<RefCell<T>>, axis: u8) -> NumberType
+    fn box_val<T: Hittable<'a> + ?Sized>(a: &Arc<Mutex<T>>, axis: u8) -> NumberType
     {
         let mut a_box = AABB::default();
-        if !a.borrow_mut().bounding_box(&mut a_box) {panic!("missing implemenation for AABB");}
+        if !a.lock().unwrap().bounding_box(&mut a_box) {panic!("missing implemenation for AABB");}
         else {a_box.minimum[axis]}
     }
 
-    fn construct(objects: Vec<Rc<RefCell<HittableObject<'a>>>>) -> Rc<RefCell<HittableObject>>
+    fn construct(objects: Vec<Arc<Mutex<HittableObject<'a>>>>) -> Arc<Mutex<HittableObject>>
     {
         let mut node = BVHnode::default();
         let mut copy = objects.clone();
-        let axis: u8 = thread_rng().gen_range(0..3);
+        let axis: u8 = rng().gen_range(0..3);
 
         println!("Axis: {axis}");
        
-        let x = move |a:&Rc<RefCell<HittableObject<'a>>>| OrderedFloat(Self::box_val(a,axis));
+        let x = move |a:&Arc<Mutex<HittableObject<'a>>>| OrderedFloat(Self::box_val(a,axis));
 
         let object_span = copy.len();
         println!("object_span = {object_span}");
@@ -1251,14 +1272,14 @@ impl<'a> BVHnode<'a> {
         let mut box_left = AABB::default(); 
         let mut box_right = AABB::default(); 
         
-        let has_left = node.left.borrow().bounding_box(&mut box_left);
-        let has_right = node.right.borrow().bounding_box(&mut box_right);
+        let has_left = node.left.lock().unwrap().bounding_box(&mut box_left);
+        let has_right = node.right.lock().unwrap().bounding_box(&mut box_right);
         if !has_left || !has_right
         {
             panic!("AABB missing");
         }
         node.aabb = box_left.surrounding_box(box_right);
-        Rc::new(RefCell::new(HittableObject::BVHnode(node)))
+        Arc::new(Mutex::new(HittableObject::BVHnode(node)))
     }
 }
 
@@ -1386,6 +1407,8 @@ impl Default for Interval {
 }
 
 fn main() {
+    rng_seed();
+
     let aspect_ratio = 1.0;//16.0/9.0;
     let imgx         = 1080;//600;
     let imgy         = ((imgx as NumberType)/aspect_ratio) as u32;
@@ -1393,7 +1416,7 @@ fn main() {
     let mut imgbuf = image::ImageBuffer::new(imgx, imgy);
     
     
-    let mut object_list: Vec<Rc<RefCell<HittableObject>>> = Vec::new();
+    let mut object_list: Vec<Arc<Mutex<HittableObject>>> = Vec::new();
     let big_light = false;
 
     //let red   = MaterialEnum::Lambertian(Lambertian{albedo: Vec3::new(0.65,0.05,0.05)});
@@ -1420,36 +1443,36 @@ fn main() {
     //let light_red = MaterialEnum::Emissive(Emissive{light:Vec3::new(7.0,0.0,0.0)});
     //let light_blue = MaterialEnum::Emissive(Emissive{light:Vec3::new(0.0,0.0,7.0)});
   
-    //object_list.push(Rc::new(RefCell::new( HittableObject::Sphere(Sphere{material: glass, center: Vec3::one(250.0), radius: 100.0}))));
-    object_list.push(Rc::new(RefCell::new( HittableObject::Sphere(Sphere{material: white, center: Vec3::one(400.0), radius: 100.0}))));
+    //object_list.push(Arc::new(Mutex::new( HittableObject::Sphere(Sphere{material: glass, center: Vec3::one(250.0), radius: 100.0}))));
+    object_list.push(Arc::new(Mutex::new( HittableObject::Sphere(Sphere{material: white, center: Vec3::one(400.0), radius: 100.0}))));
 
     let lights =  if big_light {XZRect{material: light, x0: 113.0, x1: 443.0, z0: 127.0, z1: 432.0, k: 554.0, }}
                   else {XZRect{material: light, x0: 213.0, x1: 343.0, z0: 227.0, z1: 332.0, k: 554.0, }};
 
-    object_list.push(Rc::new(RefCell::new(HittableObject::XZRect(lights.clone()))));
+    object_list.push(Arc::new(Mutex::new(HittableObject::XZRect(lights.clone()))));
     let lights = HittableObject::XZRect(lights.clone());
 
-    object_list.push(Rc::new(RefCell::new( HittableObject::YZRect(YZRect{material: green, y0: 0.0, y1: 555.0, z0: 0.0, z1: 555.0, k: 555.0, }))));
-    object_list.push(Rc::new(RefCell::new( HittableObject::YZRect(YZRect{material: red, y0: 0.0, y1: 555.0, z0: 0.0, z1: 555.0, k: 0.0, }))));
-    object_list.push(Rc::new(RefCell::new( HittableObject::XZRect(XZRect{material: white, x0: 0.0, x1: 555.0, z0: 0.0, z1: 555.0, k: 555.0, }))));
-    object_list.push(Rc::new(RefCell::new( HittableObject::XZRect(XZRect{material: white, x0: 0.0, x1: 555.0, z0: 0.0, z1: 555.0, k: 0.0, }))));
-    object_list.push(Rc::new(RefCell::new( HittableObject::XYRect(XYRect{material: white, x0: 0.0, x1: 555.0, y0: 0.0, y1: 555.0, k: 555.0, }))));
+    object_list.push(Arc::new(Mutex::new( HittableObject::YZRect(YZRect{material: green, y0: 0.0, y1: 555.0, z0: 0.0, z1: 555.0, k: 555.0, }))));
+    object_list.push(Arc::new(Mutex::new( HittableObject::YZRect(YZRect{material: red, y0: 0.0, y1: 555.0, z0: 0.0, z1: 555.0, k: 0.0, }))));
+    object_list.push(Arc::new(Mutex::new( HittableObject::XZRect(XZRect{material: white, x0: 0.0, x1: 555.0, z0: 0.0, z1: 555.0, k: 555.0, }))));
+    object_list.push(Arc::new(Mutex::new( HittableObject::XZRect(XZRect{material: white, x0: 0.0, x1: 555.0, z0: 0.0, z1: 555.0, k: 0.0, }))));
+    object_list.push(Arc::new(Mutex::new( HittableObject::XYRect(XYRect{material: white, x0: 0.0, x1: 555.0, y0: 0.0, y1: 555.0, k: 555.0, }))));
 
     let cube = HittableObject::Cuboid(Cuboid::new(Vec3::one(0.0), Vec3::new(165.0,330.0,165.0), white));
     let cube = HittableObject::RotateY(RotateY::new(&cube, 15.0));
     let cube = HittableObject::Translate(Translate{object: &cube, offset: Vec3::new(265.0,0.0,295.0)});
-    object_list.push(Rc::new(RefCell::new(cube)));
+    object_list.push(Arc::new(Mutex::new(cube)));
 
     let cube = HittableObject::Cuboid(Cuboid::new(Vec3::one(0.0), Vec3::one(165.0), white));
     let cube = HittableObject::RotateY(RotateY::new(&cube, -18.0));
     let cube = HittableObject::Translate(Translate{object: &cube, offset: Vec3::new(130.0,0.0,65.0)});
-    object_list.push(Rc::new(RefCell::new(cube)));
+    object_list.push(Arc::new(Mutex::new(cube)));
 
 
-    //object_list.push(Rc::new(RefCell::new( HittableObject::Cuboid(
+    //object_list.push(Arc::new(Mutex::new( HittableObject::Cuboid(
     //                Cuboid::new(Vec3::new(265.0,0.0,295.0), Vec3::new(430.0,330.0,460.0), white)))));
 
-    //object_list.push(Rc::new(RefCell::new(
+    //object_list.push(Arc::new(Mutex::new(
     //            XZRect{material: light, 
     //                x0: 123.0,
     //                x1: 423.0,
@@ -1459,7 +1482,7 @@ fn main() {
     //            })));
     
 //    let material = Isotropic{albedo: Vec3::one(0.5)};
-//    let fog_sphere = Rc::new(RefCell::new(
+//    let fog_sphere = Arc::new(Mutex::new(
 //            HittableObject::Sphere(
 //                Sphere{
 //                    material: white,
@@ -1467,7 +1490,7 @@ fn main() {
 //                    center: Vec3::one(0.0),
 //                } )));
 //
-//    let fog_sphere = Rc::new(RefCell::new(
+//    let fog_sphere = Arc::new(Mutex::new(
 //                ConstantMedium{
 //                    material: MaterialEnum::Isotropic(material),
 //                    boundary: fog_sphere,
@@ -1476,7 +1499,7 @@ fn main() {
 //    object_list.push(fog_sphere);
     
     //let material = Lambertian{albedo: Vec3::new(0.5,0.7,0.2)};
-    //object_list.push(Rc::new(RefCell::new(
+    //object_list.push(Arc::new(Mutex::new(
     //            Sphere{
     //                material: MaterialEnum::Lambertian(material),
     //                radius: 100.0,
@@ -1484,7 +1507,6 @@ fn main() {
     //            } )));
     
     
-    let mut rng = thread_rng();
 
     //if false { 
     //    for i in 0..10 {
@@ -1495,22 +1517,22 @@ fn main() {
     //        if choose_mat < 0.5 {
     //            let albedo = Vec3::random();
     //            let material = MaterialEnum::Lambertian(Lambertian {albedo});
-    //            object_list.push(Rc::new(RefCell::new(Sphere{material, radius: rad, center})));
+    //            object_list.push(Arc::new(Mutex::new(Sphere{material, radius: rad, center})));
     //        }
     //        //else if choose_mat < 0.5 {
     //        //    let light = Vec3::random()*4.0;
     //        //    let material = MaterialEnum::Emissive(Emissive{light});
-    //        //    object_list.push(Rc::new(RefCell::new(Sphere{material: material.clone(), radius: rad, center})));
+    //        //    object_list.push(Arc::new(Mutex::new(Sphere{material: material.clone(), radius: rad, center})));
     //        //}
     //        else if choose_mat < 0.75{
     //            let albedo = Vec3::random();
     //            let blur = random_range(0.0,0.5);
     //            let material = MaterialEnum::Metal(Metal{albedo,blur});
-    //            object_list.push(Rc::new(RefCell::new(Sphere{material: material.clone(), radius: rad, center})));
+    //            object_list.push(Arc::new(Mutex::new(Sphere{material: material.clone(), radius: rad, center})));
     //        }
     //        else {
     //            let material = MaterialEnum::Dielectric(Dielectric{ir:1.5});
-    //            object_list.push(Rc::new(RefCell::new(Sphere{material: material.clone(), radius: rad, center})));
+    //            object_list.push(Arc::new(Mutex::new(Sphere{material: material.clone(), radius: rad, center})));
     //        }
 
     //    }
@@ -1518,7 +1540,7 @@ fn main() {
 
     let num_objects = object_list.len();
     let bvh = BVHnode::construct(object_list);
-    let bvh = bvh.borrow_mut();
+    let bvh = bvh.lock().unwrap();
     
     //let cam = Camera::new(Vec3::new(13.0,2.0,3.0), Vec3::new(0.0,0.0,0.0), Vec3::new(0.0,1.0,0.0), 20.0, aspect_ratio);
     //let cam = Camera::new(Vec3::new(13.0,2.0,3.0), Vec3::new(0.0,0.0,0.0), Vec3::new(0.0,1.0,0.0), 45.0, aspect_ratio);
@@ -1528,30 +1550,36 @@ fn main() {
     
     let start = Instant::now();
 
+
+    let rng = rng();
     for (x, y, pixel) in imgbuf.enumerate_pixels_mut() {
-        if x==0 {let f = y as NumberType/imgy as NumberType * 100.0;println!("row {y}/{imgy}: {f}%");}
-
-        let samples   = 4;//16;//32;//256;
-        //let samples   = if imgy/2 < y {1024} else {8};//16;//32;//256;
-        let max_depth = 8;
-
-        let mut col = Vec3::default();
-
-        for _ in 0..samples
+        thread::spawn(|| {
         {
-            let u =     (x as NumberType+rng.gen::<NumberType>()) / (imgx as NumberType - 1.0);
-            let v = 1.0-(y as NumberType+rng.gen::<NumberType>()) / (imgy as NumberType - 1.0);
-        
-            let ray = cam.get_ray(u,v);
-            col += ray_color(&ray, &bvh, &lights, max_depth, Vec3::one(0.0));
+            if x==0 {let f = y as NumberType/imgy as NumberType * 100.0;println!("row {y}/{imgy}: {f}%");}
+
+            let samples   = 8;//16;//32;//256;
+            //let samples   = if imgy/2 < y {1024} else {8};//16;//32;//256;
+            let max_depth = 8;
+
+            let mut col = Vec3::default();
+
+            for _ in 0..samples
+            {
+                let u =     (x as NumberType+rng.gen::<NumberType>()) / (imgx as NumberType - 1.0);
+                let v = 1.0-(y as NumberType+rng.gen::<NumberType>()) / (imgy as NumberType - 1.0);
+
+                let ray = cam.get_ray(u,v);
+                col += ray_color(&ray, &bvh, &lights, max_depth, Vec3::one(0.0));
+            }
+            col=col/(samples as NumberType);
+
+            let r = (col.x.sqrt()*255.999) as u8;
+            let g = (col.y.sqrt()*255.999) as u8;
+            let b = (col.z.sqrt()*255.999) as u8;
+
+            *pixel = image::Rgb([r, g, b]);
         }
-        col=col/(samples as NumberType);
-
-        let r = (col.x.sqrt()*255.999) as u8;
-        let g = (col.y.sqrt()*255.999) as u8;
-        let b = (col.z.sqrt()*255.999) as u8;
-
-        *pixel = image::Rgb([r, g, b]);
+        });
     }
     let duration = (start.elapsed().as_millis() as NumberType)/1000.0;
     println!("Rendered {num_objects} objects in {duration} seconds");
