@@ -13,13 +13,16 @@ use num_traits::real::Real;
 //use std::rc::Rc;
 use std::mem;
 use ordered_float::OrderedFloat;
-use std::cell::RefCell;
+//use std::cell::RefCell;
 use std::time::Instant;
 //use micromath::F32Ext;
 use std::thread;
 use std::sync::{Arc,Mutex};
 
 static mut RNG: Option<SmallRng> = None;
+
+
+// will probably produce weird results when multithreading
 fn rng_seed() {
     unsafe {
         RNG = Some(SmallRng::from_entropy());
@@ -230,6 +233,13 @@ impl Vec3 {
         let mut v = Vec3::random_unit();
         v.z = v.z.abs();
         v
+    }
+    fn random_in_unit_disk() -> Vec3 {
+        Vec3::new(
+            rng().sample(StandardNormal),
+            rng().sample(StandardNormal),
+            0.0
+            ).normalized()
     }
 
     //fn random_cosine_direction() -> Vec3 {
@@ -923,7 +933,7 @@ struct CheckerTexture<'a> {
 }
 impl<'a> Texture for CheckerTexture<'a> {
     fn value(&self, u: NumberType, v: NumberType, p: Vec3) -> Vec3 {
-        let fac = 8.0;//0.2;
+        let fac = 4.0;//0.2;
         let sines = ((u*fac).fract()*2.0-1.0)*((v*fac).fract()*2.0-1.0);
         if sines < 0.0 {self.even.value(u,v,p)} else {self.odd.value(u,v,p)}
     }
@@ -995,6 +1005,7 @@ struct Camera {
     lower_left_corner: Vec3,
     horizontal: Vec3,
     vertical: Vec3,
+    lens_radius: NumberType,
 }
 
 const PI: NumberType = 3.1415926535897932385;
@@ -1010,7 +1021,10 @@ impl Camera {
         up: Vec3,
         fov: NumberType,
         aspect_ratio: NumberType,
+        aperture: NumberType,
+        focus_dist: NumberType,
         ) -> Self {
+
         let theta = deg2rad(fov);
         let h = (theta/2.0).tan();
         let viewport_height = 2.0*h;
@@ -1022,16 +1036,22 @@ impl Camera {
 
         let mut cam: Camera = Camera::default();
         cam.origin = lookfrom;
-        cam.horizontal = u*viewport_width;
-        cam.vertical = v*viewport_height;
-        cam.lower_left_corner = cam.origin - cam.horizontal/2.0 - cam.vertical/2.0 - w;
-        println!("{cam:?}");
+        cam.horizontal = u*viewport_width*focus_dist;
+        cam.vertical = v*viewport_height*focus_dist;
+        cam.lower_left_corner = cam.origin - cam.horizontal/2.0 - cam.vertical/2.0 - w*focus_dist;
+        //println!("{cam:?}");
+        cam.lens_radius = aperture / 2.0;
+
         cam
     }
     fn get_ray(&self, u: NumberType, v: NumberType) -> Ray {
+        let rd = Vec3::random_in_unit_disk()*self.lens_radius;
+        let offset = rd*Vec3::new(u,v,0.0);
+        //let offset = u*rd.x + v*rd.y;
+        //let offset = Vec3::new(offset,0.0,0.0);
         Ray {
-            ro: self.origin, 
-            rd: self.lower_left_corner + self.horizontal*u + self.vertical*v - self.origin,
+            ro: self.origin + offset, 
+            rd: self.lower_left_corner + self.horizontal*u + self.vertical*v - self.origin - offset,
         }
     }
 }
@@ -1072,7 +1092,7 @@ impl AABB {
 
 
 // Translate incoming ray for object 
- 
+
 #[derive(Clone, Copy)]
 struct Translate<'a> {
     offset: Vec3,
@@ -1113,7 +1133,7 @@ impl<'a> RotateY<'a> {
         let has_box = object.bounding_box(&mut aabb);
         let mut min = Vec3::one(NumberType::INFINITY);
         let mut max = Vec3::one(-NumberType::INFINITY);
-        
+
         let aabb_o: Option<AABB>;
         if has_box {
             for i in 0..2 {
@@ -1172,7 +1192,7 @@ impl<'a> Hittable<'a> for RotateY<'a> {
 
         n[0] = self.cos_theta*rec.n[0] + self.sin_theta*rec.n[2];
         n[2] = -self.sin_theta*rec.n[0] + self.cos_theta*rec.n[2];
-    
+
         rec.p = p;
         rec.set_face_normal(&rotated, n);
 
@@ -1233,7 +1253,7 @@ impl<'a> BVHnode<'a> {
         let axis: u8 = rng().gen_range(0..3);
 
         println!("Axis: {axis}");
-       
+
         let x = move |a:&Arc<Mutex<HittableObject<'a>>>| OrderedFloat(Self::box_val(a,axis));
 
         let object_span = copy.len();
@@ -1260,8 +1280,8 @@ impl<'a> BVHnode<'a> {
         else {
             copy.sort_by_key(x);
             let mid = object_span/2;
-            
-            
+
+
             let left_node = Self::construct(copy[mid..].to_vec());
             node.left = left_node;
 
@@ -1271,7 +1291,7 @@ impl<'a> BVHnode<'a> {
 
         let mut box_left = AABB::default(); 
         let mut box_right = AABB::default(); 
-        
+
         let has_left = node.left.lock().unwrap().bounding_box(&mut box_left);
         let has_right = node.right.lock().unwrap().bounding_box(&mut box_right);
         if !has_left || !has_right
@@ -1373,7 +1393,7 @@ struct MixPDF<'a,'b,'c,'d> {
 impl<'a,'b,'c,'d> PDF for MixPDF<'a,'b,'c,'d> {
     fn value (&self, direction: Vec3) -> NumberType {
         (1.0-self.f)*self.p2.value(direction)
-             +self.f*self.p1.value(direction)
+            +self.f*self.p1.value(direction)
     }
     fn generate(&self) -> Vec3 {
         if random_val() < self.f {
@@ -1398,7 +1418,7 @@ struct Interval {
 impl Interval {
     fn new(min: NumberType, max: NumberType) -> Self {Interval {min, max}}
     fn contains(&self, x: NumberType) -> bool {self.min <= x && x <= self.max}
-    
+
     const EMPTY: Self = Interval {min: NumberType::INFINITY, max:NumberType::NEG_INFINITY};
     const UNIVERSE: Self = Interval {min: NumberType::NEG_INFINITY, max:NumberType::INFINITY};
 }
@@ -1410,22 +1430,22 @@ fn main() {
     rng_seed();
 
     let aspect_ratio = 1.0;//16.0/9.0;
-    let imgx         = 1080;//600;
+    let imgx         = 600;
     let imgy         = ((imgx as NumberType)/aspect_ratio) as u32;
 
     let mut imgbuf = image::ImageBuffer::new(imgx, imgy);
-    
-    
+
+
     let mut object_list: Vec<Arc<Mutex<HittableObject>>> = Vec::new();
     let big_light = false;
 
     //let red   = MaterialEnum::Lambertian(Lambertian{albedo: Vec3::new(0.65,0.05,0.05)});
     //let white = MaterialEnum::Lambertian(Lambertian{albedo: Vec3::new(0.73,0.73,0.73)});
     //let green = MaterialEnum::Lambertian(Lambertian{albedo: Vec3::new(0.12,0.45,0.15)});
-    
+
 
     let c1 = SolidColor::new(Vec3::one(0.8));
-    let c2 = SolidColor::new(Vec3::one(0.2));
+    let c2 = SolidColor::new(Vec3::new(0.1,0.1,0.6));
     let checker = 
         CheckerTexture::new(& c1, & c2 );
     let checker = Lambertian::new(checker);
@@ -1442,12 +1462,12 @@ fn main() {
     //let grey  = MaterialEnum::Lambertian(Lambertian{albedo: Vec3::new(0.73,0.73,0.73)*0.4});
     //let light_red = MaterialEnum::Emissive(Emissive{light:Vec3::new(7.0,0.0,0.0)});
     //let light_blue = MaterialEnum::Emissive(Emissive{light:Vec3::new(0.0,0.0,7.0)});
-  
+
     //object_list.push(Arc::new(Mutex::new( HittableObject::Sphere(Sphere{material: glass, center: Vec3::one(250.0), radius: 100.0}))));
     object_list.push(Arc::new(Mutex::new( HittableObject::Sphere(Sphere{material: white, center: Vec3::one(400.0), radius: 100.0}))));
 
     let lights =  if big_light {XZRect{material: light, x0: 113.0, x1: 443.0, z0: 127.0, z1: 432.0, k: 554.0, }}
-                  else {XZRect{material: light, x0: 213.0, x1: 343.0, z0: 227.0, z1: 332.0, k: 554.0, }};
+    else {XZRect{material: light, x0: 213.0, x1: 343.0, z0: 227.0, z1: 332.0, k: 554.0, }};
 
     object_list.push(Arc::new(Mutex::new(HittableObject::XZRect(lights.clone()))));
     let lights = HittableObject::XZRect(lights.clone());
@@ -1480,24 +1500,24 @@ fn main() {
     //                z1: 412.0,
     //                k:  554.0, 
     //            })));
-    
-//    let material = Isotropic{albedo: Vec3::one(0.5)};
-//    let fog_sphere = Arc::new(Mutex::new(
-//            HittableObject::Sphere(
-//                Sphere{
-//                    material: white,
-//                    radius: 5000.0,
-//                    center: Vec3::one(0.0),
-//                } )));
-//
-//    let fog_sphere = Arc::new(Mutex::new(
-//                ConstantMedium{
-//                    material: MaterialEnum::Isotropic(material),
-//                    boundary: fog_sphere,
-//                    neg_inv_denisty: -1.0/0.0001,
-//                } ));
-//    object_list.push(fog_sphere);
-    
+
+    //    let material = Isotropic{albedo: Vec3::one(0.5)};
+    //    let fog_sphere = Arc::new(Mutex::new(
+    //            HittableObject::Sphere(
+    //                Sphere{
+    //                    material: white,
+    //                    radius: 5000.0,
+    //                    center: Vec3::one(0.0),
+    //                } )));
+    //
+    //    let fog_sphere = Arc::new(Mutex::new(
+    //                ConstantMedium{
+    //                    material: MaterialEnum::Isotropic(material),
+    //                    boundary: fog_sphere,
+    //                    neg_inv_denisty: -1.0/0.0001,
+    //                } ));
+    //    object_list.push(fog_sphere);
+
     //let material = Lambertian{albedo: Vec3::new(0.5,0.7,0.2)};
     //object_list.push(Arc::new(Mutex::new(
     //            Sphere{
@@ -1505,8 +1525,8 @@ fn main() {
     //                radius: 100.0,
     //                center: Vec3::new(555.0/2.0+100.0,555.0/2.0-100.0,555.0/2.0),
     //            } )));
-    
-    
+
+
 
     //if false { 
     //    for i in 0..10 {
@@ -1541,45 +1561,44 @@ fn main() {
     let num_objects = object_list.len();
     let bvh = BVHnode::construct(object_list);
     let bvh = bvh.lock().unwrap();
-    
+
     //let cam = Camera::new(Vec3::new(13.0,2.0,3.0), Vec3::new(0.0,0.0,0.0), Vec3::new(0.0,1.0,0.0), 20.0, aspect_ratio);
     //let cam = Camera::new(Vec3::new(13.0,2.0,3.0), Vec3::new(0.0,0.0,0.0), Vec3::new(0.0,1.0,0.0), 45.0, aspect_ratio);
     //let cam = Camera::new(Vec3::new(26.0,3.0,6.0), Vec3::new(0.0,2.0,0.0), Vec3::new(0.0,1.0,0.0), 20.0, aspect_ratio);
-    let cam = Camera::new(Vec3::new(278.0,278.0,-800.0), Vec3::new(278.0,278.0,0.0), Vec3::new(0.0,1.0,0.0), 40.0, aspect_ratio);
+    //let cam = Camera::new(Vec3::new(278.0,278.0,-800.0), Vec3::new(278.0,278.0,0.0), Vec3::new(0.0,1.0,0.0), 40.0, aspect_ratio, 100.0, 950.0);
+    let cam = Camera::new(Vec3::new(278.0,278.0,-800.0), Vec3::new(278.0,278.0,0.0), Vec3::new(0.0,1.0,0.0), 40.0, aspect_ratio, 1.0, 200.0);
     //let cam = Camera::new(Vec3::new(478.0,278.0,-600.0), Vec3::new(278.0,278.0,0.0), Vec3::new(0.0,1.0,0.0), 40.0, aspect_ratio);
-    
+
     let start = Instant::now();
 
 
     let rng = rng();
     for (x, y, pixel) in imgbuf.enumerate_pixels_mut() {
-        thread::spawn(|| {
+        //let tr = thread::spawn(move || {
+        if x==0 {let f = y as NumberType/imgy as NumberType * 100.0;println!("row {y}/{imgy}: {f}%");}
+
+        let samples   = 512;//16;//32;//256;
+        //let samples   = if imgy/2 < y {1024} else {8};//16;//32;//256;
+        let max_depth = 8;
+
+        let mut col = Vec3::default();
+
+        for _ in 0..samples
         {
-            if x==0 {let f = y as NumberType/imgy as NumberType * 100.0;println!("row {y}/{imgy}: {f}%");}
+            let u =     (x as NumberType+rng.gen::<NumberType>()) / (imgx as NumberType - 1.0);
+            let v = 1.0-(y as NumberType+rng.gen::<NumberType>()) / (imgy as NumberType - 1.0);
 
-            let samples   = 8;//16;//32;//256;
-            //let samples   = if imgy/2 < y {1024} else {8};//16;//32;//256;
-            let max_depth = 8;
-
-            let mut col = Vec3::default();
-
-            for _ in 0..samples
-            {
-                let u =     (x as NumberType+rng.gen::<NumberType>()) / (imgx as NumberType - 1.0);
-                let v = 1.0-(y as NumberType+rng.gen::<NumberType>()) / (imgy as NumberType - 1.0);
-
-                let ray = cam.get_ray(u,v);
-                col += ray_color(&ray, &bvh, &lights, max_depth, Vec3::one(0.0));
-            }
-            col=col/(samples as NumberType);
-
-            let r = (col.x.sqrt()*255.999) as u8;
-            let g = (col.y.sqrt()*255.999) as u8;
-            let b = (col.z.sqrt()*255.999) as u8;
-
-            *pixel = image::Rgb([r, g, b]);
+            let ray = cam.get_ray(u,v);
+            col += ray_color(&ray, &bvh, &lights, max_depth, Vec3::one(0.0));
         }
-        });
+        col=col/(samples as NumberType);
+
+        let r = (col.x.sqrt()*255.999) as u8;
+        let g = (col.y.sqrt()*255.999) as u8;
+        let b = (col.z.sqrt()*255.999) as u8;
+
+        *pixel = image::Rgb([r, g, b]);
+        //});
     }
     let duration = (start.elapsed().as_millis() as NumberType)/1000.0;
     println!("Rendered {num_objects} objects in {duration} seconds");
