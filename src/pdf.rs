@@ -1,5 +1,6 @@
 
-
+use crate::hittable::*;
+use crate::random::random_val;
 use crate::vector::Vec3;
 use crate::common::{NumberType,PI};
 use crate::onb::ONB;
@@ -10,7 +11,7 @@ pub trait PDF {
 }
 
 #[derive(Clone, Copy)]
-enum PDFEnum<'a> {
+pub enum PDFEnum<'a> {
     CosinePDF(CosinePDF),
     HittablePDF(HittablePDF<'a>),
 }
@@ -62,12 +63,12 @@ impl<'a> PDF for HittablePDF<'a> {
     }
 }
 impl<'a> HittablePDF<'a> {
-    fn new(object:&'a HittableObject<'a>, o: Vec3) -> PDFEnum<'a> {
+    pub fn new(object:&'a HittableObject<'a>, o: Vec3) -> PDFEnum<'a> {
         PDFEnum::HittablePDF(HittablePDF {object, o,})
     }
 }
 
-struct MixPDF<'a,'b,'c,'d> {
+pub struct MixPDF<'a,'b,'c,'d> {
     p1: &'a PDFEnum<'b>,
     p2: &'c PDFEnum<'d>,
     f: NumberType,
@@ -87,7 +88,7 @@ impl<'a,'b,'c,'d> PDF for MixPDF<'a,'b,'c,'d> {
     }
 }
 impl<'a,'b,'c,'d> MixPDF<'a,'b,'c,'d> {
-    fn new(p1: &'a PDFEnum<'b>, p2: &'c PDFEnum<'d>, f: NumberType) -> Self {
+    pub fn new(p1: &'a PDFEnum<'b>, p2: &'c PDFEnum<'d>, f: NumberType) -> Self {
         MixPDF { p1,p2,f } 
     }
 }

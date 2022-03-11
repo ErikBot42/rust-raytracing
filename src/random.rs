@@ -4,6 +4,8 @@ use rand::{Rng, SeedableRng};
 static mut RNG: Option<SmallRng> = None;
 use crate::common::NumberType;
 
+//TODO: add wrappers 
+
 // will probably produce weird results when multithreading
 pub fn rng_seed() {
     unsafe {
