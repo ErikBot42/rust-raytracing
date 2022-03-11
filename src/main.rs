@@ -5,18 +5,26 @@ extern crate rand;
 extern crate smallvec;
 
 pub mod common;
-
 pub mod interval;
-//
+pub mod vector;
+pub mod random;
+pub mod ray;
+pub mod texture;
+pub mod onb;
+pub mod pdf;
+
+use crate::vector::Vec3;
 use crate::interval::Interval;
-use crate::common::NumberType;
+use crate::common::{NumberType,PI};
+use crate::random::{rng_seed,rng,random_range,random_val};
+use crate::ray::Ray;
+use crate::texture::{SolidColor, TextureEnum, Texture, CheckerTexture};
+use crate::onb::ONB;
+use crate::pdf::*;
+
 
 //DivAssign,MulAssign
-use std::ops::{Add, AddAssign, Div, Mul, Neg, Sub, SubAssign, Index, IndexMut};
-use rand::{Rng, SeedableRng};
-use rand::rngs::SmallRng;
-use rand_distr::StandardNormal;
-use num_traits::real::Real;
+use rand::Rng;
 //use std::rc::Rc;
 use std::mem;
 use ordered_float::OrderedFloat;
@@ -26,281 +34,14 @@ use std::time::Instant;
 //use std::thread;
 use std::sync::{Arc,Mutex};
 
-static mut RNG: Option<SmallRng> = None;
-
-
-// will probably produce weird results when multithreading
-fn rng_seed() {
-    unsafe {
-        RNG = Some(SmallRng::from_entropy());
-    }
-}
-fn rng() -> &'static mut SmallRng{
-    unsafe {
-        RNG.as_mut().unwrap()
-    }
-}
 
 //fn rng() -> ThreadRng {
 //    thread_rng()
 //}
 
 
-#[derive(Debug, Copy, Clone, Default)]
-struct V3<T>
-{
-    x: T,
-    y: T,
-    z: T,
-}
-
-impl<T: Copy + Clone> V3<T> {
-    pub fn new(x: T, y: T, z: T) -> Self {
-        Self { x, y, z }
-    }
-    pub fn one(x: T) -> Self {
-        Self { x, y:x, z:x }
-    }
-    //fn set(&mut self,other: V3<T>) {
-    //    self.x = other.x;
-    //    self.y = other.y;
-    //    self.z = other.z;
-    //}
-}
 
 
-impl<T> Neg for V3<T> 
-where
-T: Neg + Neg<Output = T> + Copy + Clone {
-    type Output = V3<T>; 
-    fn neg(self) -> V3<T> {
-        V3::new(-self.x, -self.y, -self.z)
-    }
-}
-
-impl<T> Add for V3<T> 
-where
-T: Add + Add<Output = T> + Copy + Clone {
-    type Output = V3<T>; 
-    fn add(self, other: V3<T>) -> V3<T> {
-        V3::new(self.x+other.x, self.y+other.y, self.z+other.z)
-    }
-}
-
-impl<T> AddAssign for V3<T> 
-where
-T: AddAssign + Copy + Clone {
-    fn add_assign(&mut self, other: V3<T>) {
-        self.x+=other.x; self.y+=other.y; self.z+=other.z;
-    }
-}
-
-impl<T> Sub for V3<T> 
-where
-T: Sub + Sub<Output = T> + Copy + Clone {
-    type Output = V3<T>; 
-    fn sub(self, other: V3<T>) -> V3<T> {
-        V3::new(self.x-other.x, self.y-other.y, self.z-other.z)
-    }
-}
-
-impl<T> SubAssign<V3<T>> for V3<T> 
-where
-T: SubAssign + Copy + Clone {
-    fn sub_assign(&mut self, other: V3<T>) {
-        self.x-=other.x; self.y-=other.y; self.z-=other.z;
-    }
-}
-
-impl<T> Mul<T> for V3<T> 
-where
-T: Mul + Mul<Output = T> + Copy + Clone {
-    type Output = V3<T>; 
-    fn mul(self, other: T) -> V3<T> {
-        V3::new(self.x*other, self.y*other, self.z*other)
-    }
-}
-
-impl<T> Mul for V3<T> 
-where
-T: Mul + Mul<Output = T> + Copy + Clone {
-    type Output = V3<T>; 
-    fn mul(self, other: V3<T>) -> V3<T> {
-        V3::new(self.x*other.x, self.y*other.y, self.z*other.z)
-    }
-}
-
-impl<T> Div<T> for V3<T> 
-where
-T: Div + Div<Output = T> + Copy + Clone {
-    type Output = V3<T>; 
-    fn div(self, other: T) -> V3<T> {
-        V3::new(self.x/other, self.y/other, self.z/other)
-    }
-}
-
-impl<T> Div for V3<T> 
-where
-T: Div + Div<Output = T> + Copy + Clone {
-    type Output = V3<T>; 
-    fn div(self, other: V3<T>) -> V3<T> {
-        V3::new(self.x/other.x, self.y/other.y, self.z/other.z)
-    }
-}
-
-impl<T> Index<u8> for V3<T> {
-    type Output = T;
-    fn index(&self, index: u8) -> &T {
-        match index {
-            0 => &self.x,
-            1 => &self.y,
-            2 => &self.z,
-            _ => &self.z,
-        }
-    }
-}
-impl<T> IndexMut<u8> for V3<T> {
-    fn index_mut(&mut self, index: u8) -> &mut T{
-        match index {
-            0 => &mut self.x,
-            1 => &mut self.y,
-            2 => &mut self.z,
-            _ => &mut self.z,
-        }
-    }
-}
-
-
-
-
-impl<T> V3<T> 
-where
-    T: Mul<T, Output = T> + Add<T, Output = T> + Sub<T, Output = T> + Copy + Clone
-{
-    fn dot(self, other: V3<T>) -> T {
-        let tmp = self*other;
-        tmp.x+tmp.y+tmp.z
-    }
-    fn dot2(self) -> T {
-        self.dot(self)
-    }
-    fn cross(self, other: V3<T>) -> Self
-    {
-        V3::new(
-            self.y * other.z - self.z * other.y,
-            self.z * other.x - self.x * other.z,
-            self.x * other.y - self.y * other.x
-            )
-    }
-}
-
-impl<T> V3<T> 
-where
-    T: Mul<T, Output = T> + Add<T, Output = T> + Copy + Clone + Real
-{
-    fn length(self) -> T {
-        self.dot2().sqrt()
-    }
-    fn normalized(self) -> V3<T> {
-        self/self.length()         
-    }
-    //fn reflect(self, n: V3<T>) -> V3<T>
-    //{
-    //    self-n*(self.dot(n)+self.dot(n))
-    //}
-}
-
-impl Vec3 {
-    //fn random() -> V3<NumberType> {
-    //    V3::new(random_val(), random_val(), random_val()) 
-    //}
-    //fn random_range(a: NumberType, b:NumberType) -> V3<NumberType> {
-    //    let mut q = rand::thread_rng();  
-    //    V3::new(q.gen_range(a..b), q.gen_range(a..b), q.gen_range(a..b)) 
-    //}
-    //fn random_unit() -> V3<NumberType> {
-    //    Self::random_range(-1.0,1.0).normalized()
-    //}
-    //fn random_in_unit_hemisphere(n:Vec3) -> V3<NumberType> {
-    //    let r = Self::random_unit();
-    //    if r.dot(n)>0.0 {r} else {-r}
-    //}
-    //
-    fn random_dir() -> Vec3 {
-        Vec3::new(
-            rng().sample(StandardNormal),
-            rng().sample(StandardNormal),
-            rng().sample(StandardNormal)
-            )
-    } 
-    fn random_unit() -> Vec3 {
-        Vec3::random_dir().normalized()
-    }
-    fn random_cosine_direction() -> Vec3 {
-        let mut v = Vec3::random_unit();
-        v.z = v.z.abs();
-        v
-    }
-    fn random_in_unit_disk() -> Vec3 {
-        Vec3::new(
-            rng().sample(StandardNormal),
-            rng().sample(StandardNormal),
-            0.0
-            ).normalized()
-    }
-
-    //fn random_cosine_direction() -> Vec3 {
-    //    let mut rng = thread_rng();
-    //    let mut v = Vec3::new(rng.sample(StandardNormal),
-    //    rng.sample(StandardNormal),
-    //    rng.sample(StandardNormal)
-    //    );
-    //    v.z = v.z.abs();
-
-    //    v.normalized()
-    //}
-    //fn random_cosine_direction() -> Vec3 {
-    //    let r1 = random_val();
-    //    let r2 = random_val();
-    //    let z = (1.0-r2).sqrt();
-
-    //    let phi = 2.0*PI*r1;
-    //    let x = phi.cos()*r2.sqrt();
-    //    let y = phi.sin()*r2.sqrt();
-
-    //    Vec3::new(x,y,z)
-
-    //    //rand::distributions::Normal
-    //}
-    //fn refract(self, n: Vec3, etiot: NumberType) -> Vec3 {
-    //    let cos_theta = -self.dot(n).min(1.0);
-    //    let r_out_prep = (self + n*cos_theta)*etiot;
-    //    let r_out_parallel = n*(-(1.0 - r_out_prep.dot2()).abs().sqrt());
-    //    r_out_prep+r_out_parallel
-    //}
-}
-
-
-
-//pub type NumberType = f32;
-type Vec3 = V3<NumberType>;
-
-fn random_range(a: NumberType, b:NumberType) -> NumberType {
-    let a: NumberType = rng().gen_range(a..b);a
-}
-
-
-fn random_val() -> NumberType {let a: NumberType = rng().gen();a}
-
-#[derive(Debug, Default)]
-struct Ray {
-    ro: Vec3,
-    rd: Vec3,
-}
-
-impl Ray {
-    fn at(&self, t: NumberType) -> Vec3 { self.ro + self.rd*t }
-}
 
 fn ray_color<'a>(
     ray: &Ray,
@@ -905,54 +646,6 @@ impl<'a> Material for MaterialEnum<'a>
     }
 }
 
-trait Texture {
-    fn value(&self, u: NumberType, v: NumberType, p: Vec3) -> Vec3; 
-}
-#[derive(Clone, Copy)]
-enum TextureEnum<'a> {
-    SolidColor(SolidColor),
-    CheckerTexture(CheckerTexture<'a>),
-}
-impl<'a> Default for TextureEnum<'a> {
-    fn default() -> Self {
-        TextureEnum::SolidColor(SolidColor::default())
-    }
-}
-
-impl<'a> Texture for TextureEnum<'a> {
-    fn value(&self, u: NumberType, v: NumberType, p: Vec3) -> Vec3 {
-        match self {
-            TextureEnum::SolidColor(s) => s.value(u,v,p),
-            TextureEnum::CheckerTexture(c) => c.value(u,v,p),
-        }
-    }
-}
-#[derive(Clone, Copy, Default)]
-struct SolidColor {color_value: Vec3,}
-impl Texture for SolidColor {fn value(&self, _u: NumberType, _v: NumberType, _p: Vec3) -> Vec3 {self.color_value}}
-impl<'a> SolidColor {
-    fn new(color_value: Vec3) -> TextureEnum<'a> {TextureEnum::SolidColor(SolidColor {color_value})}
-}
-
-// no default 
-#[derive(Clone, Copy)]
-struct CheckerTexture<'a> {
-    odd: &'a TextureEnum<'a>,
-    even: &'a TextureEnum<'a>,
-}
-impl<'a> Texture for CheckerTexture<'a> {
-    fn value(&self, u: NumberType, v: NumberType, p: Vec3) -> Vec3 {
-        let fac = 4.0;//0.2;
-        let sines = ((u*fac).fract()*2.0-1.0)*((v*fac).fract()*2.0-1.0);
-        if sines < 0.0 {self.even.value(u,v,p)} else {self.odd.value(u,v,p)}
-    }
-}
-impl<'a> CheckerTexture<'a> {
-    fn new(odd: &'a TextureEnum<'a>, even: &'a TextureEnum<'a>) -> TextureEnum<'a> {
-        TextureEnum::CheckerTexture(CheckerTexture {odd,even,})
-    }
-    // inputting 2 arbitrary colors is not possible without allocation
-}
 
 //#[derive(Copy,Clone,Default)]
 //struct Metal {
@@ -1315,112 +1008,7 @@ impl<'a> BVHnode<'a> {
     }
 }
 
-#[derive(Clone, Copy)]
-struct ONB {
-    u: Vec3,
-    v: Vec3,
-    w: Vec3,
-}
-impl ONB {
-    fn local(&self,p: Vec3)->Vec3 {
-        self.u*p.x+self.v*p.y+self.w*p.z
-    }
-    fn build_from_w(n: Vec3) -> Self {
-        let w = n.normalized();
-        let a = if w.x.abs() > 0.9 {Vec3::new(0.0,1.0,0.0)} else {Vec3::new(1.0,0.0,0.0)};
-        let v = w.cross(a).normalized();
-        let u = w.cross(v);
-        ONB {u,v,w}
-    }
-}
 
-trait PDF {
-    fn value (&self, direction: Vec3) -> NumberType;
-    fn generate(&self) -> Vec3;
-}
-
-#[derive(Clone, Copy)]
-enum PDFEnum<'a> {
-    CosinePDF(CosinePDF),
-    HittablePDF(HittablePDF<'a>),
-}
-impl<'a> PDF for PDFEnum<'a> {
-    fn value (&self, direction: Vec3) -> NumberType {
-        match self {
-            PDFEnum::CosinePDF(c) => c.value(direction),
-            PDFEnum::HittablePDF(h) => h.value(direction),
-        }
-    }
-    fn generate(&self) -> Vec3 {
-        match self {
-            PDFEnum::CosinePDF(c) => c.generate(),
-            PDFEnum::HittablePDF(h) => h.generate(),
-        }
-    }
-}
-
-#[derive(Clone, Copy)]
-struct CosinePDF {
-    onb: ONB
-}
-impl PDF for CosinePDF {
-    fn value (&self, direction: Vec3) -> NumberType {
-        let cosine = direction.normalized().dot(self.onb.w);
-        if cosine < 0.0 {0.0} else {cosine/PI}
-    }
-    fn generate(&self) -> Vec3 {
-        self.onb.local(Vec3::random_cosine_direction())
-    }
-}
-impl<'a> CosinePDF {
-    fn new(w: Vec3) -> PDFEnum<'a> {
-        PDFEnum::CosinePDF(CosinePDF { onb: ONB::build_from_w(w)})
-    }
-}
-
-#[derive(Clone, Copy)]
-struct HittablePDF<'a> {
-    o: Vec3,
-    object:&'a HittableObject<'a>,
-}
-impl<'a> PDF for HittablePDF<'a> {
-    fn value (&self, direction: Vec3) -> NumberType {
-        self.object.pdf_value(self.o, direction) 
-    }
-    fn generate(&self) -> Vec3 {
-        self.object.random(self.o)
-    }
-}
-impl<'a> HittablePDF<'a> {
-    fn new(object:&'a HittableObject<'a>, o: Vec3) -> PDFEnum<'a> {
-        PDFEnum::HittablePDF(HittablePDF {object, o,})
-    }
-}
-
-struct MixPDF<'a,'b,'c,'d> {
-    p1: &'a PDFEnum<'b>,
-    p2: &'c PDFEnum<'d>,
-    f: NumberType,
-}
-impl<'a,'b,'c,'d> PDF for MixPDF<'a,'b,'c,'d> {
-    fn value (&self, direction: Vec3) -> NumberType {
-        (1.0-self.f)*self.p2.value(direction)
-            +self.f*self.p1.value(direction)
-    }
-    fn generate(&self) -> Vec3 {
-        if random_val() < self.f {
-            self.p1.generate()
-        }
-        else {
-            self.p2.generate()
-        }
-    }
-}
-impl<'a,'b,'c,'d> MixPDF<'a,'b,'c,'d> {
-    fn new(p1: &'a PDFEnum<'b>, p2: &'c PDFEnum<'d>, f: NumberType) -> Self {
-        MixPDF { p1,p2,f } 
-    }
-}
 
 //#[derive(Clone,Copy)]
 //struct Interval {
