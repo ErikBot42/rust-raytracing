@@ -4,6 +4,13 @@ extern crate lazy_static;
 extern crate rand;
 extern crate smallvec;
 
+pub mod common;
+
+pub mod interval;
+//
+use crate::interval::Interval;
+use crate::common::NumberType;
+
 //DivAssign,MulAssign
 use std::ops::{Add, AddAssign, Div, Mul, Neg, Sub, SubAssign, Index, IndexMut};
 use rand::{Rng, SeedableRng};
@@ -16,7 +23,7 @@ use ordered_float::OrderedFloat;
 //use std::cell::RefCell;
 use std::time::Instant;
 //use micromath::F32Ext;
-use std::thread;
+//use std::thread;
 use std::sync::{Arc,Mutex};
 
 static mut RNG: Option<SmallRng> = None;
@@ -275,7 +282,7 @@ impl Vec3 {
 
 
 
-type NumberType = f32;
+//pub type NumberType = f32;
 type Vec3 = V3<NumberType>;
 
 fn random_range(a: NumberType, b:NumberType) -> NumberType {
@@ -305,7 +312,7 @@ fn ray_color<'a>(
     if depth==0 {return Vec3::default();}
 
     let mut rec = HitRecord::default();
-    if !world.hit(ray, Interval::new(0.001,NumberType::INFINITY), &mut rec) {
+    if !world.hit(ray, Interval::EPSILON_UNIVERSE, &mut rec) {
         return Vec3::one(0.0) // sky
     }
 
@@ -491,7 +498,8 @@ impl<'a> Hittable<'a> for XYRect<'a> {
         let x = ray.ro.x + t*ray.rd.x;
         let y = ray.ro.y + t*ray.rd.y;
 
-        if x<self.x0 || x>self.x1 || y<self.y0 || y>self.y1 {return false;}
+        //if x<self.x0 || x>self.x1 || y<self.y0 || y>self.y1 {return false;}
+        if !Interval::new(self.x0,self.x1).contains(x) || !Interval::new(self.y0,self.y1).contains(y) {return false;}
         
         rec.u = (x-self.x0)/(self.x1-self.x0);
         rec.v = (y-self.y0)/(self.y1-self.y0);
@@ -512,6 +520,7 @@ impl<'a> Hittable<'a> for XYRect<'a> {
 //    u: Vec3,
 //    o: Vec3,
 //}
+
 
 
 
@@ -559,7 +568,7 @@ impl<'a> Hittable<'a> for XZRect<'a> {
     }
     fn pdf_value (&self, o: Vec3,v: Vec3) -> NumberType {
         let mut rec = HitRecord::default();
-        if !self.hit(&Ray{ro: o, rd: v}, Interval::new(0.001, NumberType::INFINITY), &mut rec) {return 0.0}
+        if !self.hit(&Ray{ro: o, rd: v}, Interval::EPSILON_UNIVERSE, &mut rec) {return 0.0}
 
         let area = (self.x1-self.x0)*(self.z1-self.z0);
         let dist2 = rec.t*rec.t*v.dot2();
@@ -1088,6 +1097,9 @@ impl AABB {
             self.maximum.z.max(other.maximum.z));
         AABB {minimum: min, maximum: max}
     }
+    //fn pad(&mut self) {
+    //    delta = 0.0001;
+    //}
 }
 
 
@@ -1410,21 +1422,13 @@ impl<'a,'b,'c,'d> MixPDF<'a,'b,'c,'d> {
     }
 }
 
-#[derive(Clone,Copy)]
-struct Interval {
-    min: NumberType,
-    max: NumberType,
-}
-impl Interval {
-    fn new(min: NumberType, max: NumberType) -> Self {Interval {min, max}}
-    fn contains(&self, x: NumberType) -> bool {self.min <= x && x <= self.max}
+//#[derive(Clone,Copy)]
+//struct Interval {
+//    min: NumberType,
+//    max: NumberType,
+//}
 
-    const EMPTY: Self = Interval {min: NumberType::INFINITY, max:NumberType::NEG_INFINITY};
-    const UNIVERSE: Self = Interval {min: NumberType::NEG_INFINITY, max:NumberType::INFINITY};
-}
-impl Default for Interval {
-    fn default() -> Self {Self::EMPTY}
-}
+
 
 fn main() {
     rng_seed();
@@ -1577,7 +1581,7 @@ fn main() {
         //let tr = thread::spawn(move || {
         if x==0 {let f = y as NumberType/imgy as NumberType * 100.0;println!("row {y}/{imgy}: {f}%");}
 
-        let samples   = 512;//16;//32;//256;
+        let samples   = 2;//16;//32;//256;
         //let samples   = if imgy/2 < y {1024} else {8};//16;//32;//256;
         let max_depth = 8;
 
@@ -1606,3 +1610,4 @@ fn main() {
 
     imgbuf.save("output.png").unwrap();
 }
+
