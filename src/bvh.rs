@@ -12,6 +12,7 @@ use crate::random::*;
 
 use rand::Rng;
 #[derive(Clone)]
+#[derive(Debug)]
 pub struct BVHnode<'a> {
     aabb: AABB,
     left: Arc<Mutex<HittableObject<'a>>>,
@@ -111,6 +112,7 @@ impl<'a> BVHnode<'a> {
 #[derive(Clone)]
 
 //impl Copy for BVHEnum {}
+#[derive(Debug)]
 enum BVHEnum<'a> {
     BVHHeapNode(BVHHeapNode),
     HittableObjectSimple(HittableObjectSimple<'a>),
@@ -143,6 +145,7 @@ impl BVH {
 }
 
 // switch node -> enum to store actual objects too
+#[derive(Debug)]
 pub struct BVHHeap<'a, const LEN: usize> {
     arr: [BVHEnum<'a>; LEN],
 }
@@ -166,13 +169,19 @@ impl<'a, const LEN: usize> Hittable<'a> for BVHHeap<'a, LEN> {
 }
 impl<'a, const LEN: usize> BVHHeap<'a, LEN> {
     fn hit_recursive(&self, ray: &Ray, ray_t: Interval, rec: &mut HitRecord<'a>, index: usize) -> bool {
+        //println!("hit_recursive({index})");
         match &self.arr[index] {
             BVHEnum::HittableObjectSimple(s) => s.hit(ray, ray_t, rec),
             BVHEnum::BVHHeapNode(n) => {
-                if !n.aabb.hit(ray, ray_t) {false}
+                if !n.aabb.hit(ray, ray_t) {
+                    //println!("AABB missed");
+                    false}
                 else {
+                    //println!("AABB hit");
+                    //println!("Calling hit_recursive({}) from hit_recursive({})",BVH::left(index), index);
                     let hit_left = self.hit_recursive(ray, ray_t, rec, BVH::left(index));
                     let new_interval = Interval::new(ray_t.min, if hit_left {rec.t} else {ray_t.max});
+                    //println!("Calling hit_recursive({}) from hit_recursive({})",BVH::right(index), index);
                     let hit_right = self.hit_recursive(ray, new_interval, rec, BVH::right(index));
                     hit_left || hit_right
                 }
@@ -187,9 +196,12 @@ impl<'a, const LEN: usize> BVHHeap<'a, LEN> {
         
     }
     pub fn construct(&mut self, objects: &mut [HittableObjectSimple<'a>], index: usize) {
+
         let cardinality = objects.len();
         assert!(cardinality!=0, "empty list of hittable objects");
         
+        //println!("construct({index})");
+
         if cardinality == 1 {
             *self.at(index) = BVHEnum::HittableObjectSimple(objects[0].clone());
         }
@@ -241,7 +253,7 @@ impl<'a, const LEN: usize> BVHHeap<'a, LEN> {
         self.at(BVH::left(index))
     }
     fn right(&mut self, index: usize) -> &mut BVHEnum<'a> {
-        self.at(BVH::left(index))
+        self.at(BVH::right(index))
     }
 }
 
@@ -251,6 +263,7 @@ impl<'a, const LEN: usize> BVHHeap<'a, LEN> {
 
 // to be put in an array
 #[derive(Default,Copy,Clone)]
+#[derive(Debug)]
 struct BVHHeapNode {
     aabb: AABB,
 }

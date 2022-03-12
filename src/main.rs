@@ -43,13 +43,11 @@ use std::sync::{Arc,Mutex};
 //    thread_rng()
 //}
 
+use crate::bvh::*;
 
-
-
-
-fn ray_color<'a>(
+fn ray_color<'a, const LEN: usize>(
     ray: &Ray,
-    world: &HittableObject,
+    world: &BVHHeap<LEN>,
     light: &'a HittableObject<'a>,
     depth: u32,
     acc: Vec3 //TODO iterative + background function
@@ -58,7 +56,7 @@ fn ray_color<'a>(
 
     let mut rec = HitRecord::default();
     if !world.hit(ray, Interval::EPSILON_UNIVERSE, &mut rec) {
-        return Vec3::one(0.0) // sky
+        return Vec3::new(0.1,0.0,0.0) // sky
     }
 
     let mut scattered = Ray::default();
@@ -99,18 +97,6 @@ fn ray_color<'a>(
 
     (c2+c2)/2.0
 }
-
-
-
-
-
-//impl Default for BVHnode2<'_> {fn default() -> Self {BVHnode2::Tail}}
-//impl BVHnode2<'a> {
-//    fn add(&'a self, aabb: AABB) -> Self {
-//        BVHnode2::Node{aabb, left: self, right: self}
-//    } 
-//}
-
 
 
 
@@ -171,19 +157,6 @@ impl Camera {
 }
 
 
-
-
-
-
-
-//#[derive(Clone,Copy)]
-//struct Interval {
-//    min: NumberType,
-//    max: NumberType,
-//}
-
-
-
 fn main() {
     rng_seed();
 
@@ -197,9 +170,6 @@ fn main() {
     let mut object_list: Vec<Arc<Mutex<HittableObject>>> = Vec::new();
     let big_light = false;
 
-    //let red   = MaterialEnum::Lambertian(Lambertian{albedo: Vec3::new(0.65,0.05,0.05)});
-    //let white = MaterialEnum::Lambertian(Lambertian{albedo: Vec3::new(0.73,0.73,0.73)});
-    //let green = MaterialEnum::Lambertian(Lambertian{albedo: Vec3::new(0.12,0.45,0.15)});
 
 
     let c1 = SolidColor::new(Vec3::one(0.8));
@@ -216,12 +186,6 @@ fn main() {
         if big_light {Vec3::new(4.0,4.0,4.0)}
         else{Vec3::new(15.0,15.0,15.0)}});
 
-    //let blue  = MaterialEnum::Lambertian(Lambertian{albedo: Vec3::new(0.12,0.12,0.45)});
-    //let grey  = MaterialEnum::Lambertian(Lambertian{albedo: Vec3::new(0.73,0.73,0.73)*0.4});
-    //let light_red = MaterialEnum::Emissive(Emissive{light:Vec3::new(7.0,0.0,0.0)});
-    //let light_blue = MaterialEnum::Emissive(Emissive{light:Vec3::new(0.0,0.0,7.0)});
-
-    //object_list.push(Arc::new(Mutex::new( HittableObject::Sphere(Sphere{material: glass, center: Vec3::one(250.0), radius: 100.0}))));
     object_list.push(Arc::new(Mutex::new( HittableObject::Sphere(Sphere{material: white, center: Vec3::one(400.0), radius: 100.0}))));
 
     let lights =  if big_light {XZRect{material: light, x0: 113.0, x1: 443.0, z0: 127.0, z1: 432.0, k: 554.0, }}
@@ -241,91 +205,43 @@ fn main() {
     let cube = HittableObject::Translate(Translate{object: &cube, offset: Vec3::new(265.0,0.0,295.0)});
     object_list.push(Arc::new(Mutex::new(cube)));
 
+    
+
     let cube = HittableObject::Cuboid(Cuboid::new(Vec3::one(0.0), Vec3::one(165.0), white));
+
+    
+    
+    let cube2 = HittableObject::Cuboid(Cuboid::new(Vec3::one(0.0), Vec3::new(165.0,330.0,165.0), white));
+    let cube2 = HittableObject::RotateY(RotateY::new(&cube2,  15.0));
+    let cube2 = HittableObjectSimple::Translate(Translate{object: &cube2, offset: Vec3::new(265.0,0.0,295.0)});
+
+
+    let bvh2: BVHHeap<300> = if let HittableObject::Cuboid(cube) = cube.clone() {
+        let cube = HittableObjectSimple::Cuboid(cube);
+        let mut hittable_list = [
+            cube,
+            HittableObjectSimple::XZRect(XZRect{material: light, x0: 213.0, x1: 343.0, z0: 227.0, z1: 332.0, k: 554.0, }),
+            cube2
+        ];
+        BVHHeap::construct_new(&mut hittable_list)
+    }
+    else {panic!()};
+
+    println!("{bvh2:?}");
+
+
+
     let cube = HittableObject::RotateY(RotateY::new(&cube, -18.0));
     let cube = HittableObject::Translate(Translate{object: &cube, offset: Vec3::new(130.0,0.0,65.0)});
     object_list.push(Arc::new(Mutex::new(cube)));
+    
 
 
-    //object_list.push(Arc::new(Mutex::new( HittableObject::Cuboid(
-    //                Cuboid::new(Vec3::new(265.0,0.0,295.0), Vec3::new(430.0,330.0,460.0), white)))));
-
-    //object_list.push(Arc::new(Mutex::new(
-    //            XZRect{material: light, 
-    //                x0: 123.0,
-    //                x1: 423.0,
-    //                z0: 147.0, 
-    //                z1: 412.0,
-    //                k:  554.0, 
-    //            })));
-
-    //    let material = Isotropic{albedo: Vec3::one(0.5)};
-    //    let fog_sphere = Arc::new(Mutex::new(
-    //            HittableObject::Sphere(
-    //                Sphere{
-    //                    material: white,
-    //                    radius: 5000.0,
-    //                    center: Vec3::one(0.0),
-    //                } )));
-    //
-    //    let fog_sphere = Arc::new(Mutex::new(
-    //                ConstantMedium{
-    //                    material: MaterialEnum::Isotropic(material),
-    //                    boundary: fog_sphere,
-    //                    neg_inv_denisty: -1.0/0.0001,
-    //                } ));
-    //    object_list.push(fog_sphere);
-
-    //let material = Lambertian{albedo: Vec3::new(0.5,0.7,0.2)};
-    //object_list.push(Arc::new(Mutex::new(
-    //            Sphere{
-    //                material: MaterialEnum::Lambertian(material),
-    //                radius: 100.0,
-    //                center: Vec3::new(555.0/2.0+100.0,555.0/2.0-100.0,555.0/2.0),
-    //            } )));
-
-
-
-    //if false { 
-    //    for i in 0..10 {
-    //        let rad = 50.0;
-    //        let center = Vec3::new(random_range(0.0,350.0),random_range(0.0,350.0),random_range(0.0,350.0));
-    //        let choose_mat = random_val();
-
-    //        if choose_mat < 0.5 {
-    //            let albedo = Vec3::random();
-    //            let material = MaterialEnum::Lambertian(Lambertian {albedo});
-    //            object_list.push(Arc::new(Mutex::new(Sphere{material, radius: rad, center})));
-    //        }
-    //        //else if choose_mat < 0.5 {
-    //        //    let light = Vec3::random()*4.0;
-    //        //    let material = MaterialEnum::Emissive(Emissive{light});
-    //        //    object_list.push(Arc::new(Mutex::new(Sphere{material: material.clone(), radius: rad, center})));
-    //        //}
-    //        else if choose_mat < 0.75{
-    //            let albedo = Vec3::random();
-    //            let blur = random_range(0.0,0.5);
-    //            let material = MaterialEnum::Metal(Metal{albedo,blur});
-    //            object_list.push(Arc::new(Mutex::new(Sphere{material: material.clone(), radius: rad, center})));
-    //        }
-    //        else {
-    //            let material = MaterialEnum::Dielectric(Dielectric{ir:1.5});
-    //            object_list.push(Arc::new(Mutex::new(Sphere{material: material.clone(), radius: rad, center})));
-    //        }
-
-    //    }
-    //}
 
     let num_objects = object_list.len();
     let bvh = BVHnode::construct(object_list);
-    let bvh = bvh.lock().unwrap();
 
-    //let cam = Camera::new(Vec3::new(13.0,2.0,3.0), Vec3::new(0.0,0.0,0.0), Vec3::new(0.0,1.0,0.0), 20.0, aspect_ratio);
-    //let cam = Camera::new(Vec3::new(13.0,2.0,3.0), Vec3::new(0.0,0.0,0.0), Vec3::new(0.0,1.0,0.0), 45.0, aspect_ratio);
-    //let cam = Camera::new(Vec3::new(26.0,3.0,6.0), Vec3::new(0.0,2.0,0.0), Vec3::new(0.0,1.0,0.0), 20.0, aspect_ratio);
-    //let cam = Camera::new(Vec3::new(278.0,278.0,-800.0), Vec3::new(278.0,278.0,0.0), Vec3::new(0.0,1.0,0.0), 40.0, aspect_ratio, 100.0, 950.0);
     let cam = Camera::new(Vec3::new(278.0,278.0,-800.0), Vec3::new(278.0,278.0,0.0), Vec3::new(0.0,1.0,0.0), 40.0, aspect_ratio, 1.0, 200.0);
-    //let cam = Camera::new(Vec3::new(478.0,278.0,-600.0), Vec3::new(278.0,278.0,0.0), Vec3::new(0.0,1.0,0.0), 40.0, aspect_ratio);
 
     let start = Instant::now();
 
@@ -347,7 +263,7 @@ fn main() {
             let v = 1.0-(y as NumberType+rng.gen::<NumberType>()) / (imgy as NumberType - 1.0);
 
             let ray = cam.get_ray(u,v);
-            col += ray_color(&ray, &bvh, &lights, max_depth, Vec3::one(0.0));
+            col += ray_color(&ray, &bvh2, &lights, max_depth, Vec3::one(0.0));
         }
         col=col/(samples as NumberType);
 

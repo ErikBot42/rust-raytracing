@@ -12,6 +12,7 @@ use crate::aabb::*;
 use crate::bvh::*;
 
 #[derive(Copy, Clone, Default)]
+#[derive(Debug)]
 pub struct HitRecord<'a> {
     pub p: Vec3,
     pub n: Vec3,
@@ -41,6 +42,7 @@ pub trait Hittable<'a> {
 
 
 #[derive(Clone)]
+#[derive(Debug)]
 pub enum HittableObject<'a> {
     Sphere(Sphere<'a>),
     BVHnode(BVHnode<'a>),
@@ -55,6 +57,7 @@ pub enum HittableObject<'a> {
 }
 
 #[derive(Clone)]
+#[derive(Debug)]
 pub enum HittableObjectSimple<'a> {
     Sphere(Sphere<'a>),
     XYRect(XYRect<'a>),
@@ -188,6 +191,7 @@ impl<'a> Default for HittableObject<'a> {
 }
 
 #[derive(Default, Clone, Copy)]
+#[derive(Debug)]
 pub struct XYRect<'a> {
     pub x0: NumberType,
     pub x1: NumberType,
@@ -243,6 +247,7 @@ impl<'a> Hittable<'a> for XYRect<'a> {
 
 
 #[derive(Default, Clone, Copy)]
+#[derive(Debug)]
 pub struct XZRect<'a> {
     pub x0: NumberType,
     pub x1: NumberType,
@@ -302,6 +307,7 @@ impl<'a> Hittable<'a> for XZRect<'a> {
 
 
 #[derive(Default, Clone, Copy)]
+#[derive(Debug)]
 pub struct YZRect<'a> {
     pub y0: NumberType,
     pub y1: NumberType,
@@ -347,6 +353,7 @@ impl<'a> Hittable<'a> for YZRect<'a> {
 
 
 #[derive(Default, Clone, Copy)]
+#[derive(Debug)]
 pub struct Sphere<'a> {
     pub center: Vec3,
     pub radius: NumberType,
@@ -397,6 +404,7 @@ impl<'a> Sphere<'a> {
 }
 
 #[derive(Default, Clone)]
+#[derive(Debug)]
 pub struct HittableList<'a> {
     pub l: Vec<HittableObject<'a>>,
 }
@@ -416,6 +424,7 @@ impl<'a> Hittable<'a> for HittableList<'a> {
 }
 
 #[derive(Default, Clone)]
+#[derive(Debug)]
 pub struct Cuboid<'a> {
     min: Vec3,
     max: Vec3,
@@ -453,6 +462,7 @@ impl<'a> Hittable<'a> for Cuboid<'a> {
 }
 
 #[derive(Clone, Copy)]
+#[derive(Debug)]
 pub struct ConstantMedium<'a> {
     pub neg_inv_denisty: NumberType,
     pub boundary: &'a HittableObject<'a>,
@@ -505,6 +515,7 @@ impl<'a> Hittable<'a> for ConstantMedium<'a> {
 // Translate incoming ray for object 
 
 #[derive(Clone, Copy)]
+#[derive(Debug)]
 pub struct Translate<'a> {
     pub offset: Vec3,
     pub object: &'a HittableObject<'a>,
@@ -529,6 +540,7 @@ impl<'a> Hittable<'a> for Translate<'a> {
 
 // TODO: replace with general transform?
 #[derive(Clone, Copy)]
+#[derive(Debug)]
 pub struct RotateY<'a> {
     pub sin_theta: NumberType,
     pub cos_theta: NumberType,

@@ -9,6 +9,7 @@ use std::mem;
     use core::cmp::Ordering;
 
 #[derive(Copy, Clone, Default)]
+#[derive(Debug)]
 pub struct AABB {
     pub maximum: Vec3,
     pub minimum: Vec3,

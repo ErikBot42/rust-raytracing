@@ -19,6 +19,7 @@ use crate::onb::*;
 //}
 
 #[derive(Copy,Clone,Default)]
+#[derive(Debug)]
 pub struct Lambertian<'a> {
     texture: TextureEnum<'a>,
 }
@@ -68,6 +69,7 @@ impl<'a> Lambertian<'a> {
 }
 
 #[derive(Copy,Clone,Default)]
+#[derive(Debug)]
 pub struct Emissive{
     pub light: Vec3,
 }
@@ -84,6 +86,7 @@ pub trait Material {
 }
 
 #[derive(Copy,Clone)]
+#[derive(Debug)]
 pub enum MaterialEnum<'a> {
     Lambertian(Lambertian<'a>),
     Emissive(Emissive),

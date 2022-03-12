@@ -7,6 +7,7 @@ pub trait Texture {
     fn value(&self, u: NumberType, v: NumberType, p: Vec3) -> Vec3; 
 }
 #[derive(Clone, Copy)]
+#[derive(Debug)]
 pub enum TextureEnum<'a> {
     SolidColor(SolidColor),
     CheckerTexture(CheckerTexture<'a>),
@@ -26,6 +27,7 @@ impl<'a> Texture for TextureEnum<'a> {
     }
 }
 #[derive(Clone, Copy, Default)]
+#[derive(Debug)]
 pub struct SolidColor {color_value: Vec3,}
 impl Texture for SolidColor {fn value(&self, _u: NumberType, _v: NumberType, _p: Vec3) -> Vec3 {self.color_value}}
 impl<'a> SolidColor {
@@ -34,6 +36,7 @@ impl<'a> SolidColor {
 
 // no default 
 #[derive(Clone, Copy)]
+#[derive(Debug)]
 pub struct CheckerTexture<'a> {
     pub odd: &'a TextureEnum<'a>,
     pub even: &'a TextureEnum<'a>,
