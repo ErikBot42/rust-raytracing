@@ -53,6 +53,75 @@ pub enum HittableObject<'a> {
     RotateY(RotateY<'a>),
 }
 
+#[derive(Clone)]
+pub enum HittableObjectSimple<'a> {
+    Sphere(Sphere<'a>),
+    XYRect(XYRect<'a>),
+    XZRect(XZRect<'a>),
+    YZRect(YZRect<'a>),
+    Cuboid(Cuboid<'a>),
+    Translate(Translate<'a>),
+    RotateY(RotateY<'a>),
+}
+impl<'a> Hittable<'a> for HittableObjectSimple<'a> {
+    fn hit(&self, ray: &Ray, ray_t: Interval, rec: &mut HitRecord<'a>) -> bool {
+        match self {
+            HittableObjectSimple::Sphere(s) => s.hit(ray, ray_t, rec),
+            //HittableObjectSimple::BVHnode(b) => b.hit(ray, ray_t, rec),
+            HittableObjectSimple::XYRect(xy) => xy.hit(ray, ray_t, rec),
+            HittableObjectSimple::XZRect(xz) => xz.hit(ray, ray_t, rec),
+            HittableObjectSimple::YZRect(yz) => yz.hit(ray, ray_t, rec),
+            //HittableObjectSimple::ConstantMedium(c) => c.hit(ray, ray_t, rec),
+            HittableObjectSimple::Cuboid(u) => u.hit(ray, ray_t, rec),
+            HittableObjectSimple::Translate(t) => t.hit(ray, ray_t, rec),
+            HittableObjectSimple::RotateY(ry) => ry.hit(ray, ray_t, rec),
+        }
+    }
+    fn bounding_box(&self, aabb: &mut AABB) -> bool {
+        match self {
+            HittableObjectSimple::Sphere(s) => s.bounding_box(aabb),
+            //HittableObjectSimple::BVHnode(b) => b.bounding_box(aabb),
+            HittableObjectSimple::XYRect(xy) => xy.bounding_box(aabb),
+            HittableObjectSimple::XZRect(xz) => xz.bounding_box(aabb),
+            HittableObjectSimple::YZRect(yz) => yz.bounding_box(aabb),
+            //HittableObjectSimple::ConstantMedium(c) => c.bounding_box(aabb),
+            HittableObjectSimple::Cuboid(u) => u.bounding_box(aabb),
+            HittableObjectSimple::Translate(t) => t.bounding_box(aabb),
+            HittableObjectSimple::RotateY(ry) => ry.bounding_box(aabb),
+        }
+    }
+    fn pdf_value (&self, o: Vec3,v: Vec3) -> NumberType {
+        match self {
+            HittableObjectSimple::Sphere(s) => s.pdf_value(o,v),
+            //HittableObjectSimple::BVHnode(b) => b.pdf_value(o,v),
+            HittableObjectSimple::XYRect(xy) => xy.pdf_value(o,v),
+            HittableObjectSimple::XZRect(xz) => xz.pdf_value(o,v),
+            HittableObjectSimple::YZRect(yz) => yz.pdf_value(o,v),
+            //HittableObjectSimple::ConstantMedium(c) => c.pdf_value(o,v),
+            HittableObjectSimple::Cuboid(u) => u.pdf_value(o,v),
+            HittableObjectSimple::Translate(t) => t.pdf_value(o,v),
+            HittableObjectSimple::RotateY(ry) => ry.pdf_value(o,v),
+        }
+    }
+    fn random (&self, o: Vec3) -> Vec3 {
+        match self {
+            HittableObjectSimple::Sphere(s) => s.random(o),
+            //HittableObjectSimple::BVHnode(b) => b.random(o),
+            HittableObjectSimple::XYRect(xy) => xy.random(o),
+            HittableObjectSimple::XZRect(xz) => xz.random(o),
+            HittableObjectSimple::YZRect(yz) => yz.random(o),
+            //HittableObjectSimple::ConstantMedium(c) => c.random(o),
+            HittableObjectSimple::Cuboid(u) => u.random(o),
+            HittableObjectSimple::Translate(t) => t.random(o),
+            HittableObjectSimple::RotateY(ry) => ry.random(o),
+        }
+
+    }
+
+
+}
+
+
 impl<'a> Hittable<'a> for HittableObject<'a>
 {
     fn hit(&self, ray: &Ray, ray_t: Interval, rec: &mut HitRecord<'a>) -> bool {

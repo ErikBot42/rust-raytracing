@@ -5,6 +5,9 @@ use crate::common::*;
 use crate::ray::*;
 use std::mem;
 
+
+    use core::cmp::Ordering;
+
 #[derive(Copy, Clone, Default)]
 pub struct AABB {
     pub maximum: Vec3,
@@ -37,7 +40,7 @@ impl AABB {
             self.maximum.z.max(other.maximum.z));
         AABB {minimum: min, maximum: max}
     }
-    //fn pad(&mut self) {
-    //    delta = 0.0001;
-    //}
+    pub fn compare(&self, other: AABB, axis: u8) -> Ordering {
+        self.minimum[axis].partial_cmp(&self.minimum[axis]).unwrap()
+    }
 }

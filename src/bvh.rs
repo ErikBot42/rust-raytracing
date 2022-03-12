@@ -107,9 +107,30 @@ impl<'a> BVHnode<'a> {
     }
 }
 
+#[derive(Clone)]
+
+//impl Copy for BVHEnum {}
+enum BVHEnum<'a> {
+    BVHHeapNode(BVHHeapNode),
+    HittableObjectSimple(HittableObjectSimple<'a>),
+}
+impl<'a> Default for BVHEnum<'a> {
+    fn default() -> Self {BVHEnum::BVHHeapNode(BVHHeapNode::default())}
+}
+impl<'a> Hittable<'a> for BVHEnum<'a> {
+    fn hit(&self, ray: &Ray, ray_t: Interval, rec: &mut HitRecord<'a>) -> bool {
+        unimplemented!();
+        // cannot be implemented for BVHHeapNode, it can only return it's AABB
+    }
+    fn bounding_box(&self, aabb: &mut AABB) -> bool {
+        unimplemented!();
+    }  
+}
+
 struct BVH;
 
 impl BVH {
+    fn top() -> usize {0}
     fn left(index: usize) -> usize {(index+1)*2-1}
     fn right(index: usize) -> usize {(index+1)*2+1-1}
     fn parent(index: usize) -> Option<usize> {
@@ -119,19 +140,95 @@ impl BVH {
 }
 
 // switch node -> enum to store actual objects too
-struct BVHHeap<const LEN: usize> {
-    array: [BVHHeapNode; LEN],
+struct BVHHeap<'a, const LEN: usize> {
+    arr: [BVHEnum<'a>; LEN],
 }
-impl<const LEN: usize> Default for BVHHeap<LEN>
+impl<'a, const LEN: usize> Default for BVHHeap<'a, LEN>
 {
     fn default() -> Self {
-        BVHHeap{ array: [BVHHeapNode::default();LEN]}     
+        unsafe {
+            let mut arr: [BVHEnum; LEN] = core::mem::zeroed();
+            for x in &mut arr {*x = BVHEnum::default();}
+            BVHHeap{arr}
+        }
     }
 }
-impl<const LEN: usize> BVHHeap<LEN> {
-    fn new() -> Self {
-        Self::default() 
+impl<'a, const LEN: usize> Hittable<'a> for BVHHeap<'a, LEN> {
+    fn hit(&self, ray: &Ray, ray_t: Interval, rec: &mut HitRecord<'a>) -> bool {
+        unimplemented!();
     }
+    fn bounding_box(&self, aabb: &mut AABB) -> bool {
+        unimplemented!();
+    }  
+}
+impl<'a, const LEN: usize> BVHHeap<'a, LEN> {
+    pub fn construct_new(objects: &mut [HittableObjectSimple<'a>]) -> Self {
+        let mut bvh = Self::default();
+        bvh.construct(objects, 0);
+        bvh
+        
+    }
+    pub fn construct(&mut self, objects: &mut [HittableObjectSimple<'a>], index: usize) {
+        let cardinality = objects.len();
+        assert!(cardinality!=0, "empty list of hittable objects");
+        
+        if cardinality == 1 {
+            *self.at(index) = BVHEnum::HittableObjectSimple(objects[0].clone());
+        }
+        else {
+
+            if cardinality == 2 {
+                *self.left(index) = BVHEnum::HittableObjectSimple(objects[0].clone());
+                *self.right(index) = BVHEnum::HittableObjectSimple(objects[1].clone());
+
+            }
+            else {
+
+                let axis = rng().gen_range(0..3);
+                let x = 
+                    move |a: &HittableObjectSimple, b: &HittableObjectSimple| {
+                    let a_box = AABB::default();
+                    let b_box = AABB::default();
+                    a_box.compare(b_box, axis)
+                };
+                objects.sort_unstable_by(x);
+                
+                let mid = cardinality/2;
+                
+                self.construct(&mut objects[..mid], BVH::left(index));
+                self.construct(&mut objects[mid..], BVH::right(index));
+            }
+
+            // left and right has been constucted at this point.
+
+            let mut box_left = AABB::default();
+            let mut box_right = AABB::default();
+
+            let has_left = self.left(index).bounding_box(&mut box_left);
+            let has_right = self.right(index).bounding_box(&mut box_right);
+
+            assert!(has_left && has_right);
+            
+            let aabb = box_left.surrounding_box(box_right);
+
+            *self.at(index) = BVHEnum::BVHHeapNode(BVHHeapNode::new(aabb));
+
+        }
+    }
+
+    fn at(&mut self, index: usize) -> &mut BVHEnum<'a> {
+        &mut self.arr[index]
+    }
+    fn left(&mut self, index: usize) -> &mut BVHEnum<'a> {
+        self.at(BVH::left(index))
+    }
+    fn right(&mut self, index: usize) -> &mut BVHEnum<'a> {
+        self.at(BVH::left(index))
+    }
+}
+
+
+impl<'a, const LEN: usize> BVHHeap<'a, LEN> {
 }
 
 // to be put in an array
@@ -139,12 +236,23 @@ impl<const LEN: usize> BVHHeap<LEN> {
 struct BVHHeapNode {
     aabb: AABB,
 }
+impl BVHHeapNode {
+    fn new(aabb: AABB) -> Self {
+        BVHHeapNode{ aabb }
+    }
+//    fn hit(self, ray: &Ray, ray_t: Interval, rec: &mut HitRecord<'a>) -> bool {
+//    }
+//    fn bounding_box(&self, aabb: &mut AABB) -> bool {
+//    }  
+}
+
+
+
+
 // needs hittable
-
-
-
 #[test]
 fn test_bvh() {
+    //use std::mem::size_of;
     
     assert_eq!(BVH::left(0),1);
     assert_eq!(BVH::right(0),2);
@@ -152,8 +260,10 @@ fn test_bvh() {
     assert_eq!(BVH::parent(1),Some(0));
     assert_eq!(BVH::parent(1),Some(0));
     
+    //let s = size_of::<HittableObject>();
+    //let t = size_of::<BVHHeapNode>();
+    ////let v = size_of::<BVHEnum>();
+    //panic!("{s}, {t}");
+    
     //let bvh: BVHHeap<3> = BVHHeap::new();
-    
-
-    
 }
