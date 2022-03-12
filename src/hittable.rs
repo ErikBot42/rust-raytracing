@@ -51,6 +51,7 @@ pub enum HittableObject<'a> {
     Cuboid(Cuboid<'a>),
     Translate(Translate<'a>),
     RotateY(RotateY<'a>),
+
 }
 
 #[derive(Clone)]

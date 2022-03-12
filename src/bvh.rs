@@ -30,9 +30,10 @@ impl<'a> Default for BVHnode<'a>{
 }
 impl<'a> Hittable<'a> for BVHnode<'a> {
     fn hit(&self, ray: &Ray, ray_t: Interval, rec: &mut HitRecord<'a>) -> bool {
-        if !self.aabb.hit(ray, ray_t.min, ray_t.max) {return false;}
+        if !self.aabb.hit(ray, ray_t) {return false;}
         let hit_left = self.left.lock().unwrap().hit(ray, ray_t, rec);
-        let hit_right = self.right.lock().unwrap().hit(ray, Interval::new(ray_t.min, if hit_left {rec.t} else {ray_t.max}), rec);
+        let hit_right = self.right.lock().unwrap().hit(ray, 
+            Interval::new(ray_t.min, if hit_left {rec.t} else {ray_t.max}), rec);
         hit_left || hit_right
     }
     fn bounding_box(&self, aabb: &mut AABB) -> bool {
@@ -118,12 +119,14 @@ impl<'a> Default for BVHEnum<'a> {
     fn default() -> Self {BVHEnum::BVHHeapNode(BVHHeapNode::default())}
 }
 impl<'a> Hittable<'a> for BVHEnum<'a> {
-    fn hit(&self, ray: &Ray, ray_t: Interval, rec: &mut HitRecord<'a>) -> bool {
-        unimplemented!();
-        // cannot be implemented for BVHHeapNode, it can only return it's AABB
+    fn hit(&self, _ray: &Ray, _ray_t: Interval, _rec: &mut HitRecord<'a>) -> bool {
+        unimplemented!(); 
     }
     fn bounding_box(&self, aabb: &mut AABB) -> bool {
-        unimplemented!();
+        match self {
+            BVHEnum::BVHHeapNode(n) => {*aabb = n.aabb; true},
+            BVHEnum::HittableObjectSimple(s) => s.bounding_box(aabb),
+        }
     }  
 }
 
@@ -140,7 +143,7 @@ impl BVH {
 }
 
 // switch node -> enum to store actual objects too
-struct BVHHeap<'a, const LEN: usize> {
+pub struct BVHHeap<'a, const LEN: usize> {
     arr: [BVHEnum<'a>; LEN],
 }
 impl<'a, const LEN: usize> Default for BVHHeap<'a, LEN>
@@ -155,13 +158,28 @@ impl<'a, const LEN: usize> Default for BVHHeap<'a, LEN>
 }
 impl<'a, const LEN: usize> Hittable<'a> for BVHHeap<'a, LEN> {
     fn hit(&self, ray: &Ray, ray_t: Interval, rec: &mut HitRecord<'a>) -> bool {
-        unimplemented!();
+        self.hit_recursive(ray, ray_t, rec, 0)
     }
-    fn bounding_box(&self, aabb: &mut AABB) -> bool {
+    fn bounding_box(&self, _aabb: &mut AABB) -> bool {
         unimplemented!();
     }  
 }
 impl<'a, const LEN: usize> BVHHeap<'a, LEN> {
+    fn hit_recursive(&self, ray: &Ray, ray_t: Interval, rec: &mut HitRecord<'a>, index: usize) -> bool {
+        match &self.arr[index] {
+            BVHEnum::HittableObjectSimple(s) => s.hit(ray, ray_t, rec),
+            BVHEnum::BVHHeapNode(n) => {
+                if !n.aabb.hit(ray, ray_t) {false}
+                else {
+                    let hit_left = self.hit_recursive(ray, ray_t, rec, BVH::left(index));
+                    let new_interval = Interval::new(ray_t.min, if hit_left {rec.t} else {ray_t.max});
+                    let hit_right = self.hit_recursive(ray, new_interval, rec, BVH::right(index));
+                    hit_left || hit_right
+                }
+            }
+             
+        }
+    }
     pub fn construct_new(objects: &mut [HittableObjectSimple<'a>]) -> Self {
         let mut bvh = Self::default();
         bvh.construct(objects, 0);

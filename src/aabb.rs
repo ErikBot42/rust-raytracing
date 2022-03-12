@@ -1,7 +1,7 @@
 
 
 use crate::vector::Vec3;
-use crate::common::*;
+use crate::interval::*;
 use crate::ray::*;
 use std::mem;
 
@@ -15,16 +15,16 @@ pub struct AABB {
 }
 
 impl AABB {
-    pub fn hit(&self, ray: &Ray, mut t_min: NumberType, mut t_max: NumberType) -> bool
+    pub fn hit(&self, ray: &Ray, mut ray_t: Interval) -> bool
     {
         for a in 0..3 {
             let invd = 1.0/ray.rd[a];
             let mut t0 = (self.minimum[a] - ray.ro[a])*invd;
             let mut t1 = (self.maximum[a] - ray.ro[a])*invd;
             if invd<0.0 {mem::swap(&mut t0,&mut t1);}
-            t_min = t_min.max(t0);
-            t_max = t_max.max(t1);
-            if t_max <= t_min {return false;}
+            ray_t.min = ray_t.min.max(t0);
+            ray_t.max = ray_t.max.max(t1);
+            if ray_t.max <= ray_t.min {return false;}
         }
         true
     }
@@ -41,6 +41,6 @@ impl AABB {
         AABB {minimum: min, maximum: max}
     }
     pub fn compare(&self, other: AABB, axis: u8) -> Ordering {
-        self.minimum[axis].partial_cmp(&self.minimum[axis]).unwrap()
+        self.minimum[axis].partial_cmp(&other.minimum[axis]).unwrap()
     }
 }

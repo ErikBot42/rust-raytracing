@@ -335,7 +335,7 @@ fn main() {
         //let tr = thread::spawn(move || {
         if x==0 {let f = y as NumberType/imgy as NumberType * 100.0;println!("row {y}/{imgy}: {f}%");}
 
-        let samples   = 256;//16;//32;//256;
+        let samples   = 8;//16;//32;//256;
         //let samples   = if imgy/2 < y {1024} else {8};//16;//32;//256;
         let max_depth = 8;
 
