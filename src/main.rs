@@ -30,7 +30,7 @@ use crate::render::*;
 
 
 
-//fn cornell_box<'a>() -> [HittableObjectSimple<'a>; 8]{
+//fn cornell_box<'a>() -> [HittableObject<'a>; 8]{
 //
 //
 //    let red = Lambertian::col(Vec3::new(0.65,0.05,0.05));
@@ -43,28 +43,26 @@ use crate::render::*;
 //    
 //    let cube = HittableObject::Cuboid(Cuboid::new(Vec3::one(0.0), Vec3::new(165.0,330.0,165.0), white));
 //    let cube_rot = HittableObject::RotateY(RotateY::new(&cube,  15.0));
-//    let cube_trans = HittableObjectSimple::Translate(Translate{object: &cube, offset: Vec3::new(265.0,0.0,295.0)});
+//    let cube_trans = HittableObject::Translate(Translate{object: &cube, offset: Vec3::new(265.0,0.0,295.0)});
 //
 //    let cube2 = HittableObject::Cuboid(Cuboid::new(Vec3::one(0.0), Vec3::new(165.0,165.0,165.0), white));
 //    let cube2 = HittableObject::RotateY(RotateY::new(&cube2, -18.0));
-//    let cube2 = HittableObjectSimple::Translate(Translate{object: &cube2, offset: Vec3::new(130.0,0.0,65.0)});
+//    let cube2 = HittableObject::Translate(Translate{object: &cube2, offset: Vec3::new(130.0,0.0,65.0)});
 //
 //    let cornell_box = [
 //        cube,
-//        HittableObjectSimple::XZRect(XZRect{material: light, x0: 213.0, x1: 343.0, z0: 227.0, z1: 332.0, k: 554.0, }),
+//        HittableObject::XZRect(XZRect{material: light, x0: 213.0, x1: 343.0, z0: 227.0, z1: 332.0, k: 554.0, }),
 //        cube2,
-//        HittableObjectSimple::YZRect(YZRect{material: green, y0: 0.0, y1: 555.0, z0: 0.0, z1: 555.0, k: 555.0, }),
-//        HittableObjectSimple::YZRect(YZRect{material: red, y0: 0.0, y1: 555.0, z0: 0.0, z1: 555.0, k: 0.0, }),
-//        HittableObjectSimple::XZRect(XZRect{material: white, x0: 0.0, x1: 555.0, z0: 0.0, z1: 555.0, k: 555.0, }),
-//        HittableObjectSimple::XZRect(XZRect{material: white, x0: 0.0, x1: 555.0, z0: 0.0, z1: 555.0, k: 0.0, }),
-//        HittableObjectSimple::XYRect(XYRect{material: white, x0: 0.0, x1: 555.0, y0: 0.0, y1: 555.0, k: 555.0, })
+//        HittableObject::YZRect(YZRect{material: green, y0: 0.0, y1: 555.0, z0: 0.0, z1: 555.0, k: 555.0, }),
+//        HittableObject::YZRect(YZRect{material: red, y0: 0.0, y1: 555.0, z0: 0.0, z1: 555.0, k: 0.0, }),
+//        HittableObject::XZRect(XZRect{material: white, x0: 0.0, x1: 555.0, z0: 0.0, z1: 555.0, k: 555.0, }),
+//        HittableObject::XZRect(XZRect{material: white, x0: 0.0, x1: 555.0, z0: 0.0, z1: 555.0, k: 0.0, }),
+//        HittableObject::XYRect(XYRect{material: white, x0: 0.0, x1: 555.0, y0: 0.0, y1: 555.0, k: 555.0, })
 //    ];
 //
 //    cornell_box
 //
 //}
-
-
 
 fn main() {
     rng_seed();
@@ -91,11 +89,11 @@ fn main() {
     
     let cube = HittableObject::Cuboid(Cuboid::new(Vec3::one(0.0), Vec3::new(165.0,330.0,165.0), white));
     let cube = HittableObject::RotateY(RotateY::new(&cube,  15.0));
-    let cube = HittableObjectSimple::Translate(Translate{object: &cube, offset: Vec3::new(265.0,0.0,295.0)});
+    let cube = HittableObject::Translate(Translate{object: &cube, offset: Vec3::new(265.0,0.0,295.0)});
 
     let cube2 = HittableObject::Cuboid(Cuboid::new(Vec3::one(0.0), Vec3::new(165.0,165.0,165.0), white));
     let cube2 = HittableObject::RotateY(RotateY::new(&cube2, -18.0));
-    let cube2 = HittableObjectSimple::Translate(Translate{object: &cube2, offset: Vec3::new(130.0,0.0,65.0)});
+    let cube2 = HittableObject::Translate(Translate{object: &cube2, offset: Vec3::new(130.0,0.0,65.0)});
     //object_list.push(Arc::new(Mutex::new(cube2)));
 
     //let cube2 = HittableObject::Cuboid(Cuboid::new(Vec3::one(0.0), Vec3::one(165.0), white));
@@ -103,15 +101,17 @@ fn main() {
     const SIZE_CORNELL: usize = 8;
     let cornell_box = [
         cube,
-        HittableObjectSimple::XZRect(XZRect{material: light, x0: 213.0, x1: 343.0, z0: 227.0, z1: 332.0, k: 554.0, }),
+        HittableObject::XZRect(XZRect{material: light, x0: 213.0, x1: 343.0, z0: 227.0, z1: 332.0, k: 554.0, }),
         cube2,
-        HittableObjectSimple::YZRect(YZRect{material: green, y0: 0.0, y1: 555.0, z0: 0.0, z1: 555.0, k: 555.0, }),
-        HittableObjectSimple::YZRect(YZRect{material: red, y0: 0.0, y1: 555.0, z0: 0.0, z1: 555.0, k: 0.0, }),
-        HittableObjectSimple::XZRect(XZRect{material: white, x0: 0.0, x1: 555.0, z0: 0.0, z1: 555.0, k: 555.0, }),
-        HittableObjectSimple::XZRect(XZRect{material: white, x0: 0.0, x1: 555.0, z0: 0.0, z1: 555.0, k: 0.0, }),
-        HittableObjectSimple::XYRect(XYRect{material: white, x0: 0.0, x1: 555.0, y0: 0.0, y1: 555.0, k: 555.0, })
+        HittableObject::YZRect(YZRect{material: green, y0: 0.0, y1: 555.0, z0: 0.0, z1: 555.0, k: 555.0, }),
+        HittableObject::YZRect(YZRect{material: red, y0: 0.0, y1: 555.0, z0: 0.0, z1: 555.0, k: 0.0, }),
+        HittableObject::XZRect(XZRect{material: white, x0: 0.0, x1: 555.0, z0: 0.0, z1: 555.0, k: 555.0, }),
+        HittableObject::XZRect(XZRect{material: white, x0: 0.0, x1: 555.0, z0: 0.0, z1: 555.0, k: 0.0, }),
+        HittableObject::XYRect(XYRect{material: white, x0: 0.0, x1: 555.0, y0: 0.0, y1: 555.0, k: 555.0, })
     ];
-    const MAX_SIZE: usize = 100; 
+    const MAX_SIZE: usize = SIZE_CORNELL; 
+
+
     const HEAP_SIZE: usize = MAX_SIZE*2;
     let mut hittable_list = cornell_box;
     let bvh2: BVHHeap<HEAP_SIZE> = {BVHHeap::construct_new(&mut hittable_list[0..8])};

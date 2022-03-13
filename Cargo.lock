@@ -575,6 +575,7 @@ dependencies = [
  "ordered-float",
  "rand",
  "rand_distr",
+ "rayon",
  "smallvec",
 ]
 

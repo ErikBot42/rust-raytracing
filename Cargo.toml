@@ -16,7 +16,7 @@ ordered-float = "*"
 rand_distr = "*"
 micromath = "*"
 array-concat = "*"
-
+rayon = "*"
 
 [rust]
 debuginfo-level = 1

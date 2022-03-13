@@ -16,7 +16,7 @@ use rand::Rng;
 #[derive(Debug)]
 enum BVHEnum<'a> {
     BVHHeapNode(BVHHeapNode),
-    HittableObjectSimple(HittableObjectSimple<'a>),
+    HittableObject(HittableObject<'a>),
 }
 impl<'a> Default for BVHEnum<'a> {
     fn default() -> Self {BVHEnum::BVHHeapNode(BVHHeapNode::default())}
@@ -28,7 +28,7 @@ impl<'a> Hittable<'a> for BVHEnum<'a> {
     fn bounding_box(&self, aabb: &mut AABB) -> bool {
         match self {
             BVHEnum::BVHHeapNode(n) => {*aabb = n.aabb; true},
-            BVHEnum::HittableObjectSimple(s) => s.bounding_box(aabb),
+            BVHEnum::HittableObject(s) => s.bounding_box(aabb),
         }
     }  
 }
@@ -76,7 +76,7 @@ impl<'a, const LEN: usize> BVHHeap<'a, LEN> {
     fn hit_recursive(&self, ray: &Ray, ray_t: Interval, rec: &mut HitRecord<'a>, index: usize) -> bool {
         //println!("hit_recursive({index})");
         match &self.arr[index] {
-            BVHEnum::HittableObjectSimple(s) => s.hit(ray, ray_t, rec),
+            BVHEnum::HittableObject(s) => s.hit(ray, ray_t, rec),
             BVHEnum::BVHHeapNode(n) => {
                 if !n.aabb.hit(ray, ray_t) {
                     //println!("AABB missed");
@@ -94,13 +94,13 @@ impl<'a, const LEN: usize> BVHHeap<'a, LEN> {
              
         }
     }
-    pub fn construct_new(objects: &mut [HittableObjectSimple<'a>]) -> Self {
+    pub fn construct_new(objects: &mut [HittableObject<'a>]) -> Self {
         let mut bvh = Self::default();
         bvh.construct(objects, 0);
         bvh
         
     }
-    pub fn construct(&mut self, objects: &mut [HittableObjectSimple<'a>], index: usize) {
+    pub fn construct(&mut self, objects: &mut [HittableObject<'a>], index: usize) {
 
         let cardinality = objects.len();
         assert!(cardinality!=0, "empty list of hittable objects");
@@ -108,20 +108,20 @@ impl<'a, const LEN: usize> BVHHeap<'a, LEN> {
         //println!("construct({index})");
 
         if cardinality == 1 {
-            *self.at(index) = BVHEnum::HittableObjectSimple(objects[0].clone());
+            *self.at(index) = BVHEnum::HittableObject(objects[0].clone());
         }
         else {
 
             if cardinality == 2 {
-                *self.left(index) = BVHEnum::HittableObjectSimple(objects[0].clone());
-                *self.right(index) = BVHEnum::HittableObjectSimple(objects[1].clone());
+                *self.left(index) = BVHEnum::HittableObject(objects[0].clone());
+                *self.right(index) = BVHEnum::HittableObject(objects[1].clone());
 
             }
             else {
 
                 let axis = rng().gen_range(0..3);
                 let x = 
-                    move |a: &HittableObjectSimple, b: &HittableObjectSimple| {
+                    move |a: &HittableObject, b: &HittableObject| {
                     let mut a_box = AABB::default();
                     let mut b_box = AABB::default();
 
