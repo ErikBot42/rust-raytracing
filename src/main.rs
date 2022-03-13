@@ -16,162 +16,60 @@ pub mod hittable;
 pub mod material;
 pub mod aabb;
 pub mod bvh;
+pub mod render;
 
 //use crate::HittableObject::*;
 use crate::vector::Vec3;
-use crate::interval::Interval;
-use crate::common::*;
-use crate::random::{rng_seed,rng};
-use crate::ray::Ray;
+use crate::random::rng_seed;
 use crate::texture::{SolidColor, CheckerTexture};
-use crate::pdf::*;
 use crate::hittable::*;
 use crate::material::*;
 use crate::bvh::*;
-
-//DivAssign,MulAssign
-use rand::Rng;
-//use std::rc::Rc;
-//use std::cell::RefCell;
-use std::time::Instant;
-//use micromath::F32Ext;
-//use std::thread;
-use std::sync::{Arc,Mutex};
+use crate::render::*;
 
 
-//fn rng() -> ThreadRng {
-//    thread_rng()
+
+
+//fn cornell_box<'a>() -> [HittableObjectSimple<'a>; 8]{
+//
+//
+//    let red = Lambertian::col(Vec3::new(0.65,0.05,0.05));
+//    let green = Lambertian::col(Vec3::new(0.12,0.45,0.15));
+//    let light = MaterialEnum::Emissive(Emissive{light: Vec3::new(15.0,15.0,15.0)});
+//
+//
+//    let white = Lambertian::col(Vec3::one(0.73));
+//
+//    
+//    let cube = HittableObject::Cuboid(Cuboid::new(Vec3::one(0.0), Vec3::new(165.0,330.0,165.0), white));
+//    let cube_rot = HittableObject::RotateY(RotateY::new(&cube,  15.0));
+//    let cube_trans = HittableObjectSimple::Translate(Translate{object: &cube, offset: Vec3::new(265.0,0.0,295.0)});
+//
+//    let cube2 = HittableObject::Cuboid(Cuboid::new(Vec3::one(0.0), Vec3::new(165.0,165.0,165.0), white));
+//    let cube2 = HittableObject::RotateY(RotateY::new(&cube2, -18.0));
+//    let cube2 = HittableObjectSimple::Translate(Translate{object: &cube2, offset: Vec3::new(130.0,0.0,65.0)});
+//
+//    let cornell_box = [
+//        cube,
+//        HittableObjectSimple::XZRect(XZRect{material: light, x0: 213.0, x1: 343.0, z0: 227.0, z1: 332.0, k: 554.0, }),
+//        cube2,
+//        HittableObjectSimple::YZRect(YZRect{material: green, y0: 0.0, y1: 555.0, z0: 0.0, z1: 555.0, k: 555.0, }),
+//        HittableObjectSimple::YZRect(YZRect{material: red, y0: 0.0, y1: 555.0, z0: 0.0, z1: 555.0, k: 0.0, }),
+//        HittableObjectSimple::XZRect(XZRect{material: white, x0: 0.0, x1: 555.0, z0: 0.0, z1: 555.0, k: 555.0, }),
+//        HittableObjectSimple::XZRect(XZRect{material: white, x0: 0.0, x1: 555.0, z0: 0.0, z1: 555.0, k: 0.0, }),
+//        HittableObjectSimple::XYRect(XYRect{material: white, x0: 0.0, x1: 555.0, y0: 0.0, y1: 555.0, k: 555.0, })
+//    ];
+//
+//    cornell_box
+//
 //}
 
-use crate::bvh::*;
-
-fn ray_color<'a, const LEN: usize>(
-    ray: &Ray,
-    world: &BVHHeap<LEN>,
-    light: &'a HittableObject<'a>,
-    depth: u32,
-    acc: Vec3 //TODO iterative + background function
-    ) -> Vec3 {
-    if depth==0 {return Vec3::default();}
-
-    let mut rec = HitRecord::default();
-    if !world.hit(ray, Interval::EPSILON_UNIVERSE, &mut rec) {
-        return Vec3::new(0.1,0.0,0.0) // sky
-    }
-
-    let mut scattered = Ray::default();
-    let emitted = rec.material.emission();
-    let mut pdf = 0.0;
-    let mut albedo = Vec3::one(0.0);
-
-    if !rec.material.scatter(ray, &rec, &mut albedo, &mut scattered, &mut pdf) {return emitted;}
-   
-    //let p = CosinePDF::new(rec.n);
-    //scattered = Ray{ro: rec.p, rd: p.generate()};
-    //pdf = p.value(scattered.rd);
-    
-    //let light_pdf = HittablePDF::new(light, rec.p);
-    //let scattered = Ray{ro: rec.p, rd:light_pdf.generate()};
-    //let pdf = light_pdf.value(scattered.rd);
-
-    let pdf_light = HittablePDF::new(light, rec.p);
-    let pdf_cosine = CosinePDF::new(rec.n);
-    //let mix_pdf = pdf_light;
-    let mix_pdf = MixPDF::new(&pdf_light, &pdf_cosine, 0.5);
-    
-    //let c1 = {
-    ////let mix_pdf = pdf_light;
-    //let scattered = Ray{ro: rec.p, rd: mix_pdf.generate()};
-    //let pdf = mix_pdf.value(scattered.rd);
-    //emitted 
-    //    + albedo*rec.material.scattering_pdf(ray, &rec, &scattered)
-    //    *ray_color(&scattered, world, light, (depth-1).min(1), acc)/pdf};
-
-    let c2 = {
-    //let mix_pdf = pdf_cosine;
-    let scattered = Ray{ro: rec.p, rd: mix_pdf.generate()};
-    let pdf = mix_pdf.value(scattered.rd);
-    emitted 
-        + albedo*rec.material.scattering_pdf(ray, &rec, &scattered)
-        *ray_color(&scattered, world, light, depth-1, acc)/pdf};
-
-    (c2+c2)/2.0
-}
-
-
-
-
-#[derive(Clone, Copy, Default, Debug)]
-struct Camera {
-    origin: Vec3,
-    lower_left_corner: Vec3,
-    horizontal: Vec3,
-    vertical: Vec3,
-    lens_radius: NumberType,
-}
-
-
-impl Camera {
-    fn new(
-        lookfrom: Vec3,
-        lookat: Vec3,
-        up: Vec3,
-        fov: NumberType,
-        aspect_ratio: NumberType,
-        aperture: NumberType,
-        focus_dist: NumberType,
-        ) -> Self {
-
-        let theta = deg2rad(fov);
-        let h = (theta/2.0).tan();
-        let viewport_height = 2.0*h;
-        let viewport_width = aspect_ratio * viewport_height;
-
-        let w = (lookfrom-lookat).normalized();
-        let u = up.cross(w).normalized();
-        let v = w.cross(u);
-
-        let mut cam: Camera = Camera::default();
-        cam.origin = lookfrom;
-        cam.horizontal = u*viewport_width*focus_dist;
-        cam.vertical = v*viewport_height*focus_dist;
-        cam.lower_left_corner = cam.origin - cam.horizontal/2.0 - cam.vertical/2.0 - w*focus_dist;
-        //println!("{cam:?}");
-        cam.lens_radius = aperture / 2.0;
-
-        cam
-    }
-    fn get_ray(&self, u: NumberType, v: NumberType) -> Ray {
-        let rd = Vec3::random_in_unit_disk()*self.lens_radius;
-        let offset = rd*Vec3::new(u,v,0.0);
-        //let offset = u*rd.x + v*rd.y;
-        //let offset = Vec3::new(offset,0.0,0.0);
-        //
-
-        // rd is mostly a matrix multiplication, (u,v)*[horizontal,vertical]
-        Ray {
-            ro: self.origin + offset, 
-            rd: self.lower_left_corner + self.horizontal*u + self.vertical*v - self.origin - offset,
-        }
-    }
-}
 
 
 fn main() {
     rng_seed();
 
-    let aspect_ratio = 1.0;//16.0/9.0;
-    let imgx         = 600;
-    let imgy         = ((imgx as NumberType)/aspect_ratio) as u32;
-
-    let mut imgbuf = image::ImageBuffer::new(imgx, imgy);
-
-
-    let mut object_list: Vec<Arc<Mutex<HittableObject>>> = Vec::new();
     let big_light = false;
-
-
-
     let c1 = SolidColor::new(Vec3::one(0.8));
     let c2 = SolidColor::new(Vec3::new(0.1,0.1,0.6));
     let checker = 
@@ -186,98 +84,40 @@ fn main() {
         if big_light {Vec3::new(4.0,4.0,4.0)}
         else{Vec3::new(15.0,15.0,15.0)}});
 
-    object_list.push(Arc::new(Mutex::new( HittableObject::Sphere(Sphere{material: white, center: Vec3::one(400.0), radius: 100.0}))));
-
     let lights =  if big_light {XZRect{material: light, x0: 113.0, x1: 443.0, z0: 127.0, z1: 432.0, k: 554.0, }}
     else {XZRect{material: light, x0: 213.0, x1: 343.0, z0: 227.0, z1: 332.0, k: 554.0, }};
 
-    object_list.push(Arc::new(Mutex::new(HittableObject::XZRect(lights))));
     let lights = HittableObject::XZRect(lights);
-
-    object_list.push(Arc::new(Mutex::new( HittableObject::YZRect(YZRect{material: green, y0: 0.0, y1: 555.0, z0: 0.0, z1: 555.0, k: 555.0, }))));
-    object_list.push(Arc::new(Mutex::new( HittableObject::YZRect(YZRect{material: red, y0: 0.0, y1: 555.0, z0: 0.0, z1: 555.0, k: 0.0, }))));
-    object_list.push(Arc::new(Mutex::new( HittableObject::XZRect(XZRect{material: white, x0: 0.0, x1: 555.0, z0: 0.0, z1: 555.0, k: 555.0, }))));
-    object_list.push(Arc::new(Mutex::new( HittableObject::XZRect(XZRect{material: white, x0: 0.0, x1: 555.0, z0: 0.0, z1: 555.0, k: 0.0, }))));
-    object_list.push(Arc::new(Mutex::new( HittableObject::XYRect(XYRect{material: white, x0: 0.0, x1: 555.0, y0: 0.0, y1: 555.0, k: 555.0, }))));
-
+    
     let cube = HittableObject::Cuboid(Cuboid::new(Vec3::one(0.0), Vec3::new(165.0,330.0,165.0), white));
-    let cube = HittableObject::RotateY(RotateY::new(&cube, 15.0));
-    let cube = HittableObject::Translate(Translate{object: &cube, offset: Vec3::new(265.0,0.0,295.0)});
-    object_list.push(Arc::new(Mutex::new(cube)));
+    let cube = HittableObject::RotateY(RotateY::new(&cube,  15.0));
+    let cube = HittableObjectSimple::Translate(Translate{object: &cube, offset: Vec3::new(265.0,0.0,295.0)});
 
+    let cube2 = HittableObject::Cuboid(Cuboid::new(Vec3::one(0.0), Vec3::new(165.0,165.0,165.0), white));
+    let cube2 = HittableObject::RotateY(RotateY::new(&cube2, -18.0));
+    let cube2 = HittableObjectSimple::Translate(Translate{object: &cube2, offset: Vec3::new(130.0,0.0,65.0)});
+    //object_list.push(Arc::new(Mutex::new(cube2)));
+
+    //let cube2 = HittableObject::Cuboid(Cuboid::new(Vec3::one(0.0), Vec3::one(165.0), white));
     
+    const SIZE_CORNELL: usize = 8;
+    let cornell_box = [
+        cube,
+        HittableObjectSimple::XZRect(XZRect{material: light, x0: 213.0, x1: 343.0, z0: 227.0, z1: 332.0, k: 554.0, }),
+        cube2,
+        HittableObjectSimple::YZRect(YZRect{material: green, y0: 0.0, y1: 555.0, z0: 0.0, z1: 555.0, k: 555.0, }),
+        HittableObjectSimple::YZRect(YZRect{material: red, y0: 0.0, y1: 555.0, z0: 0.0, z1: 555.0, k: 0.0, }),
+        HittableObjectSimple::XZRect(XZRect{material: white, x0: 0.0, x1: 555.0, z0: 0.0, z1: 555.0, k: 555.0, }),
+        HittableObjectSimple::XZRect(XZRect{material: white, x0: 0.0, x1: 555.0, z0: 0.0, z1: 555.0, k: 0.0, }),
+        HittableObjectSimple::XYRect(XYRect{material: white, x0: 0.0, x1: 555.0, y0: 0.0, y1: 555.0, k: 555.0, })
+    ];
+    const MAX_SIZE: usize = 100; 
+    const HEAP_SIZE: usize = MAX_SIZE*2;
+    let mut hittable_list = cornell_box;
+    let bvh2: BVHHeap<HEAP_SIZE> = {BVHHeap::construct_new(&mut hittable_list[0..8])};
 
-    let cube = HittableObject::Cuboid(Cuboid::new(Vec3::one(0.0), Vec3::one(165.0), white));
+    render(&lights, &bvh2);
 
-    
-    
-    let cube2 = HittableObject::Cuboid(Cuboid::new(Vec3::one(0.0), Vec3::new(165.0,330.0,165.0), white));
-    let cube2 = HittableObject::RotateY(RotateY::new(&cube2,  15.0));
-    let cube2 = HittableObjectSimple::Translate(Translate{object: &cube2, offset: Vec3::new(265.0,0.0,295.0)});
-
-
-    let bvh2: BVHHeap<300> = if let HittableObject::Cuboid(cube) = cube.clone() {
-        let cube = HittableObjectSimple::Cuboid(cube);
-        let mut hittable_list = [
-            cube,
-            HittableObjectSimple::XZRect(XZRect{material: light, x0: 213.0, x1: 343.0, z0: 227.0, z1: 332.0, k: 554.0, }),
-            cube2
-        ];
-        BVHHeap::construct_new(&mut hittable_list)
-    }
-    else {panic!()};
-
-    println!("{bvh2:?}");
-
-
-
-    let cube = HittableObject::RotateY(RotateY::new(&cube, -18.0));
-    let cube = HittableObject::Translate(Translate{object: &cube, offset: Vec3::new(130.0,0.0,65.0)});
-    object_list.push(Arc::new(Mutex::new(cube)));
-    
-
-
-
-    let num_objects = object_list.len();
-    let bvh = BVHnode::construct(object_list);
-
-    let cam = Camera::new(Vec3::new(278.0,278.0,-800.0), Vec3::new(278.0,278.0,0.0), Vec3::new(0.0,1.0,0.0), 40.0, aspect_ratio, 1.0, 200.0);
-
-    let start = Instant::now();
-
-
-    let rng = rng();
-    for (x, y, pixel) in imgbuf.enumerate_pixels_mut() {
-        //let tr = thread::spawn(move || {
-        if x==0 {let f = y as NumberType/imgy as NumberType * 100.0;println!("row {y}/{imgy}: {f}%");}
-
-        let samples   = 8;//16;//32;//256;
-        //let samples   = if imgy/2 < y {1024} else {8};//16;//32;//256;
-        let max_depth = 8;
-
-        let mut col = Vec3::default();
-
-        for _ in 0..samples
-        {
-            let u =     (x as NumberType+rng.gen::<NumberType>()) / (imgx as NumberType - 1.0);
-            let v = 1.0-(y as NumberType+rng.gen::<NumberType>()) / (imgy as NumberType - 1.0);
-
-            let ray = cam.get_ray(u,v);
-            col += ray_color(&ray, &bvh2, &lights, max_depth, Vec3::one(0.0));
-        }
-        col=col/(samples as NumberType);
-
-        let r = (col.x.sqrt()*255.999) as u8;
-        let g = (col.y.sqrt()*255.999) as u8;
-        let b = (col.z.sqrt()*255.999) as u8;
-
-        *pixel = image::Rgb([r, g, b]);
-        //});
-    }
-    let duration = (start.elapsed().as_millis() as NumberType)/1000.0;
-    println!("Rendered {num_objects} objects in {duration} seconds");
-
-
-    imgbuf.save("output.png").unwrap();
 }
+
 

@@ -18,6 +18,8 @@ pub struct AABB {
 impl AABB {
     pub fn hit(&self, ray: &Ray, mut ray_t: Interval) -> bool
     {
+
+        //TODO: optimize away the division
         for a in 0..3 {
             let invd = 1.0/ray.rd[a];
             let mut t0 = (self.minimum[a] - ray.ro[a])*invd;
