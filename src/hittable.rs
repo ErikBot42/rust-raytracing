@@ -9,7 +9,6 @@ use crate::material::*;
 use crate::ray::*;
 use crate::interval::*;
 use crate::aabb::*;
-use crate::bvh::*;
 
 #[derive(Copy, Clone, Default)]
 #[derive(Debug)]
@@ -59,6 +58,7 @@ pub enum HittableObject<'a> {
 
 #[derive(Clone)]
 #[derive(Debug)]
+#[deprecated(note = "AAAA")]
 pub enum HittableObjectSimple<'a> {
     Sphere(Sphere<'a>),
     XYRect(XYRect<'a>),
