@@ -22,7 +22,7 @@ impl<'a> Default for BVHEnum<'a> {
     fn default() -> Self {BVHEnum::BVHHeapNode(BVHHeapNode::default())}
 }
 impl<'a> Hittable<'a> for BVHEnum<'a> {
-    fn hit(&self, _ray: &Ray, _ray_t: Interval, _rec: &mut HitRecord<'a>) -> bool {
+    fn hit(&self, _ray: &Ray, _ray_t: Interval) -> Option<HitRecord> {
         unimplemented!(); 
     }
     fn bounding_box(&self, aabb: &mut AABB) -> bool {
@@ -33,9 +33,9 @@ impl<'a> Hittable<'a> for BVHEnum<'a> {
     }  
 }
 
-struct BVH;
+struct Bvh;
 
-impl BVH {
+impl Bvh {
     #[allow(dead_code)]
     fn top() -> usize {0}
 
@@ -65,30 +65,40 @@ impl<'a, const LEN: usize> Default for BVHHeap<'a, LEN>
     }
 }
 impl<'a, const LEN: usize> Hittable<'a> for BVHHeap<'a, LEN> {
-    fn hit(&self, ray: &Ray, ray_t: Interval, rec: &mut HitRecord<'a>) -> bool {
-        self.hit_recursive(ray, ray_t, rec, 0)
+    fn hit(&self, ray: &Ray, ray_t: Interval) -> Option<HitRecord> {
+        self.hit_recursive(ray, ray_t, 0)
     }
     fn bounding_box(&self, _aabb: &mut AABB) -> bool {
         unimplemented!();
     }  
 }
 impl<'a, const LEN: usize> BVHHeap<'a, LEN> {
-    fn hit_recursive(&self, ray: &Ray, ray_t: Interval, rec: &mut HitRecord<'a>, index: usize) -> bool {
+    fn hit_recursive(&self, ray: &Ray, ray_t: Interval, index: usize) -> Option<HitRecord>{
         //println!("hit_recursive({index})");
         match &self.arr[index] {
-            BVHEnum::HittableObject(s) => s.hit(ray, ray_t, rec),
+            BVHEnum::HittableObject(s) => s.hit(ray, ray_t),
             BVHEnum::BVHHeapNode(n) => {
                 if !n.aabb.hit(ray, ray_t) {
                     //println!("AABB missed");
-                    false}
+                    None}
                 else {
                     //println!("AABB hit");
                     //println!("Calling hit_recursive({}) from hit_recursive({})",BVH::left(index), index);
-                    let hit_left = self.hit_recursive(ray, ray_t, rec, BVH::left(index));
-                    let new_interval = Interval::new(ray_t.min, if hit_left {rec.t} else {ray_t.max});
+                    let hit_left = self.hit_recursive(ray, ray_t, Bvh::left(index));
+                    let new_interval = Interval::new(ray_t.min, 
+                                                     match hit_left {
+                                                         None => ray_t.max,
+                                                         Some(rec) => {
+                                                             rec.t 
+                                                         }
+                                                     });
                     //println!("Calling hit_recursive({}) from hit_recursive({})",BVH::right(index), index);
-                    let hit_right = self.hit_recursive(ray, new_interval, rec, BVH::right(index));
-                    hit_left || hit_right
+                    let hit_right = self.hit_recursive(ray, new_interval, Bvh::right(index));
+                    match hit_right {
+                        None => hit_left,
+                        Some(rec) => Some(rec),
+
+                    }
                 }
             }
              
@@ -133,8 +143,8 @@ impl<'a, const LEN: usize> BVHHeap<'a, LEN> {
                 
                 let mid = cardinality/2;
                 
-                self.construct(&mut objects[..mid], BVH::left(index));
-                self.construct(&mut objects[mid..], BVH::right(index));
+                self.construct(&mut objects[..mid], Bvh::left(index));
+                self.construct(&mut objects[mid..], Bvh::right(index));
             }
 
             // left and right has been constucted at this point.
@@ -158,10 +168,10 @@ impl<'a, const LEN: usize> BVHHeap<'a, LEN> {
         &mut self.arr[index]
     }
     fn left(&mut self, index: usize) -> &mut BVHEnum<'a> {
-        self.at(BVH::left(index))
+        self.at(Bvh::left(index))
     }
     fn right(&mut self, index: usize) -> &mut BVHEnum<'a> {
-        self.at(BVH::right(index))
+        self.at(Bvh::right(index))
     }
 }
 
@@ -193,11 +203,11 @@ impl BVHHeapNode {
 fn test_bvh() {
     //use std::mem::size_of;
     
-    assert_eq!(BVH::left(0),1);
-    assert_eq!(BVH::right(0),2);
-    assert_eq!(BVH::parent(0),None);
-    assert_eq!(BVH::parent(1),Some(0));
-    assert_eq!(BVH::parent(1),Some(0));
+    assert_eq!(Bvh::left(0),1);
+    assert_eq!(Bvh::right(0),2);
+    assert_eq!(Bvh::parent(0),None);
+    assert_eq!(Bvh::parent(1),Some(0));
+    assert_eq!(Bvh::parent(1),Some(0));
     
     //let s = size_of::<HittableObject>();
     //let t = size_of::<BVHHeapNode>();

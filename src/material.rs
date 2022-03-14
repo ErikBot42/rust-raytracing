@@ -58,12 +58,12 @@ impl<'a> Material for Lambertian<'a> {
     }
 }
 impl<'a> Lambertian<'a> {
-    pub fn new(texture: TextureEnum) -> MaterialEnum {
+    pub fn create(texture: TextureEnum) -> MaterialEnum {
         MaterialEnum::Lambertian(Lambertian {texture,})
     } 
     pub fn col(color: Vec3) -> MaterialEnum<'a> {
         MaterialEnum::Lambertian(Lambertian {
-            texture: SolidColor::new(color),
+            texture: SolidColor::create(color),
         }) 
     }
 }

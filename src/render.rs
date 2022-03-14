@@ -83,33 +83,32 @@ use rayon::prelude::*;
 //use rayon::iter::IntoParallelIterator;
 //use rayon::iter::ParallelIterator;
 //use rayon::iter::IndexedParallelIterator;
-use std::thread;
 
-use image::{RgbImage, Rgb};
+use image::RgbImage;
+use std::sync::Mutex;
 
-pub fn render<'a, const LEN: usize>(lights: &'a HittableObject<'a>, bvh2: &BVHHeap<'a, LEN>) {
-
+pub fn render<'a, const LEN: usize>(lights: &'a HittableObject<'a>, bvh2: &BVHHeap<'a, LEN>, samples: u32) {
+    println!("render tiem");
     //let scene;
 
-    let start = Instant::now();
     const ASPECT_RATIO: NumberType = 1.0;//16.0/9.0;
-    const IMGX: usize = 1200;
+    const IMGX: usize = 2160;
     const IMGY: usize = ((IMGX as NumberType)/ASPECT_RATIO) as usize;
     
 
-    static imgx: usize = IMGX;
-    let imgy = IMGY;
-    let aspect_ratio = ASPECT_RATIO;
 
 
     //let mut imgbuf = image::ImageBuffer::<image::Rgb<u8>>::new(IMGX as u32, IMGY as u32);
     //let imgbuf = image::ImageBuffer::new(30,30);
     let mut imgbuf = RgbImage::new(IMGX as u32, IMGY as u32);
-    let cam = Camera::new(Vec3::new(278.0,278.0,-800.0), Vec3::new(278.0,278.0,0.0), Vec3::new(0.0,1.0,0.0), 40.0, aspect_ratio, 0.0, 200.0);
+    let cam = Camera::new(Vec3::new(278.0,278.0,-800.0), Vec3::new(278.0,278.0,0.0), Vec3::new(0.0,1.0,0.0), 40.0, ASPECT_RATIO, 0.0, 200.0);
     
+
+
+
     let scene = Scene{
-        samples: 1024,
-        max_depth: 4,//8,
+        samples,
+        max_depth: 16,
         cam,
         imgx: IMGX,
         imgy: IMGY,
@@ -117,78 +116,57 @@ pub fn render<'a, const LEN: usize>(lights: &'a HittableObject<'a>, bvh2: &BVHHe
 
     const IMGBUFX_SIZE: usize = (IMGX*3) as usize;
     
-    let a = [[0;10];10];
         
 
 
 
-    let mut buffer: [[ColorValueType; IMGBUFX_SIZE];IMGY] = [[0 as ColorValueType; IMGBUFX_SIZE];IMGY];
-    //for (y, line) in buffer.iter_mut().take(imgy).enumerate() {
-    //{
-    //    render_line(line, lights, bvh2, y, &scene);
-    //}
-    //
-    //
-    let a = [20..40].into_iter().zip([0..10]);
-    //let iter = buffer.into_par_iter().zip([0..IMGY].into_iter());
-    //buffer.par_iter_mut()
-    //
+    static mut BUFFER: [[ColorValueType; IMGBUFX_SIZE];IMGY] = [[0; IMGBUFX_SIZE];IMGY];
+
+    let rows_rendered = Mutex::new(0);
+    let rows_rendered = &rows_rendered;
+    // Multithreaded
     
-    //let mut it = [0..].into_iter();
-
-    //loop {
-    //    let a = it.next().unwrap();
-    //    println!("{a:?}");
-    //}
-
-    //buffer.par_iter_mut()
-    //
-    if true
-    {
-        buffer.iter_mut()
-            .zip((0u32..u32::MAX).into_iter())
-            .for_each(|(line,y)| {
-                //let y = 300;
-                render_line(line, lights, bvh2, y, &scene);
-            });
+    let start = Instant::now();
+    unsafe {
+    BUFFER.par_iter_mut()
+    //buffer.iter_mut()
+        //.with_min_len(2)
+        .zip((0u32..u32::MAX).into_iter())
+        .for_each(|(line,y)| {
+            render_line(line, lights, bvh2, y, &scene);
+            let mut num = rows_rendered.lock().unwrap();
+            *num += 1;
+            let f = (*num as NumberType)/(IMGY as NumberType);
+            let p = f*100.0;
+            let duration = (start.elapsed().as_millis() as NumberType)/1000.0;
+            let eta_total_expect = duration/f;
+            let eta = eta_total_expect-duration;
+            println!("row {num}/{IMGY}: {p:.2}%, duration: {duration:.0} seconds, ETA: {eta:.0}/{eta_total_expect:.0} seconds");
+        });
     }
-    else {
-
-        buffer.par_iter_mut()
-            .with_min_len(2)
-            .zip((0u32..u32::MAX).into_iter())
-            .for_each(|(line,y)| {
-                //let y = 300;
-                render_line(line, lights, bvh2, y, &scene);
-            });
-    }
-        //render_line(line, lights, bvh2, y, &scene);
-    //std::iter::zip(buffer.into_par_iter(),0..);
-
-
-
-    //for (y, line) in buffer.iter_mut().enumerate().take(imgy) {
-    //    render_line(line, lights, bvh2, y, &scene);
-    //}
+    let duration = (start.elapsed().as_millis() as NumberType)/1000.0;
 
 
     for (x, y, pixel) in imgbuf.enumerate_pixels_mut() {
         let xindex = x as usize * 3;
-        *pixel = image::Rgb([
-            buffer[y as usize][xindex],
-            buffer[y as usize][xindex+1],
-            buffer[y as usize][xindex+2]
-        ]);
+        unsafe {
+            *pixel = image::Rgb([
+                BUFFER[y as usize][xindex],
+                BUFFER[y as usize][xindex+1],
+                BUFFER[y as usize][xindex+2]
+            ]);
+        }
     }
 
-    //for (x, y, pixel) in imgbuf.enumerate_pixels_mut() {
-    //    //let tr = thread::spawn(move || {
-    //    //});
-    //}
-    let duration = (start.elapsed().as_millis() as NumberType)/1000.0;
 
     let num_objects = LEN/2;
+
+    let time_per_sample = duration/samples as NumberType;
     println!("Rendered {num_objects} objects in {duration} seconds");
+    println!("Samples: {samples}");
+    println!("num_objects: {num_objects}");
+    println!("duration: {duration} seconds");
+    println!("time/sample: {time_per_sample} seconds");
 
 
     imgbuf.save("output.png").unwrap();
@@ -198,9 +176,6 @@ pub fn render<'a, const LEN: usize>(lights: &'a HittableObject<'a>, bvh2: &BVHHe
 fn render_line<'a, const LEN: usize>(buffer: &mut [ColorValueType], lights: &'a HittableObject<'a>, bvh2: &BVHHeap<'a, LEN>, y: u32, scene: &Scene) {
     let rng = rng();
 
-    let f = y as NumberType/scene.imgy as NumberType * 100.0;
-    let imgy = scene.imgy;
-    println!("row {y}/{imgy}: {f}%");
     for x in 0..scene.imgx {
         let mut col = Vec3::default();
         for _ in 0..scene.samples
@@ -209,7 +184,15 @@ fn render_line<'a, const LEN: usize>(buffer: &mut [ColorValueType], lights: &'a 
             let v = 1.0-(y as NumberType+rng.gen::<NumberType>()) / (scene.imgy as NumberType - 1.0);
 
             let ray = scene.cam.get_ray(u,v);
-            col += ray_color(&ray, &bvh2, &lights, scene.max_depth, Vec3::one(0.0));
+
+
+            let mut ray_col = ray_color(&ray, bvh2, lights, scene.max_depth, Vec3::one(0.0));
+            
+            if ray_col.x.is_nan() {ray_col.x = 0.0;} 
+            if ray_col.y.is_nan() {ray_col.y = 0.0;} 
+            if ray_col.z.is_nan() {ray_col.z = 0.0;} 
+
+            col+=ray_col;
         }
         col=col/(scene.samples as NumberType);
         let r = (col.x.sqrt()*255.999) as u8;
@@ -232,10 +215,11 @@ fn ray_color<'a, const LEN: usize>(
     ) -> Vec3 {
     if depth==0 {return Vec3::default();}
 
-    let mut rec = HitRecord::default();
-    if !world.hit(ray, Interval::EPSILON_UNIVERSE, &mut rec) {
-        return Vec3::new(0.0,0.0,0.0) // sky
-    }
+    let rec = match world.hit(ray, Interval::EPSILON_UNIVERSE) {
+        None => return Vec3::new(0.0,0.0,0.0),
+        Some(rec) => rec,
+    };
+    
     if true {
         let mut scattered = Ray::default();
         let emitted = rec.material.emission();
@@ -252,8 +236,8 @@ fn ray_color<'a, const LEN: usize>(
         //let scattered = Ray{ro: rec.p, rd:light_pdf.generate()};
         //let pdf = light_pdf.value(scattered.rd);
 
-        let pdf_light = HittablePDF::new(light, rec.p);
-        let pdf_cosine = CosinePDF::new(rec.n);
+        let pdf_light = HittablePDF::create(light, rec.p);
+        let pdf_cosine = CosinePDF::create(rec.n);
         //let mix_pdf = pdf_light;
         let mix_pdf = MixPDF::new(&pdf_light, &pdf_cosine, 0.5);
         //let c1 = {

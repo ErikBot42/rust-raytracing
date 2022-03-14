@@ -3,7 +3,7 @@ use crate::vector::Vec3;
 use crate::common::*;
 //use crate::onb::ONB;
 //use crate::common::{NumberType,PI};
-use crate::random::{random_range,random_val};
+use crate::random::random_range;
 //use crate::random::{rng_seed,rng,random_range,random_val};
 use crate::material::*;
 use crate::ray::*;
@@ -21,40 +21,58 @@ pub struct HitRecord<'a> {
     pub t: NumberType,
     pub front_face: bool,
 }
+// TODO: material should be reference
 
+
+//impl<'a> Default for HitRecord<'a> {
+//    fn default() -> Self {
+//        HitRecord {
+//            p: Vec3::default(),
+//            n: Vec3::default(),
+//            u: NumberType::default(),
+//            v: NumberType::default(),
+//            material: MaterialEnum::default(),
+//            t: NumberType::default(),
+//            front_face: bool::default(),
+//        }
+//    }
+//}
 impl<'a> HitRecord<'a> {
-    fn set_face_normal(&mut self, ray: &Ray, outward_normal: Vec3)
+    fn new<U,V>(material: &MaterialEnum<'a>, ray: &Ray, t: NumberType, n: Vec3, u: U, v: V) -> Self 
+    where
+    U: Into<Option<NumberType>>,
+    V: Into<Option<NumberType>>
     {
-        self.front_face = ray.rd.dot(outward_normal) < 0.0;
-        self.n = if self.front_face {outward_normal} else {-outward_normal}
+        let mut rec = HitRecord {
+            p: ray.at(t),
+            n,
+            u: u.into().unwrap_or(0.0), 
+            v: v.into().unwrap_or(0.0),
+            material: *material,
+            t,
+            front_face: bool::default(),
+        };
+        rec.update_normal(ray);
+        rec
     }
+    
+    fn update_normal(&mut self, ray: &Ray) {
+        self.front_face = ray.rd.dot(self.n) < 0.0;
+        self.n = if self.front_face {self.n} else {-self.n}
+    }
+
+
 }
 
 pub trait Hittable<'a> {
     // TODO: return option instead
-    fn hit(&self, ray: &Ray, ray_t: Interval, rec: &mut HitRecord<'a>) -> bool;
+    //fn hit(&self, ray: &Ray, ray_t: Interval, rec: &mut HitRecord<'a>) -> bool;
+    fn hit(&self, ray: &Ray, ray_t: Interval) -> Option<HitRecord>;
     fn bounding_box(&self, _aabb: &mut AABB) -> bool {false}  
 
     fn pdf_value (&self, _o: Vec3,_v: Vec3) -> NumberType {panic!("pdf_value for Hittable is not implemented")}
     fn random (&self, _o: Vec3) -> Vec3 {panic!("random for Hittable is not implemented")}
 }
-
-
-//#[derive(Clone)]
-//#[derive(Debug)]
-
-//pub enum HittableObject<'a> {
-//    Sphere(Sphere<'a>),
-////    BVHnode(BVHnode<'a>),
-//    XYRect(XYRect<'a>),
-//    XZRect(XZRect<'a>),
-//    YZRect(YZRect<'a>),
-//    //ConstantMedium(ConstantMedium<'a>),
-//    Cuboid(Cuboid<'a>),
-//    Translate(Translate<'a>),
-//    RotateY(RotateY<'a>),
-//
-//}
 
 #[derive(Clone)]
 #[derive(Debug)]
@@ -67,78 +85,21 @@ pub enum HittableObject<'a> {
     Translate(Translate<'a>),
     RotateY(RotateY<'a>),
 }
-//impl<'a> Hittable<'a> for HittableObject<'a> {
-//    fn hit(&self, ray: &Ray, ray_t: Interval, rec: &mut HitRecord<'a>) -> bool {
-//        match self {
-//            HittableObject::Sphere(s) => s.hit(ray, ray_t, rec),
-//            //HittableObject::BVHnode(b) => b.hit(ray, ray_t, rec),
-//            HittableObject::XYRect(xy) => xy.hit(ray, ray_t, rec),
-//            HittableObject::XZRect(xz) => xz.hit(ray, ray_t, rec),
-//            HittableObject::YZRect(yz) => yz.hit(ray, ray_t, rec),
-//            //HittableObject::ConstantMedium(c) => c.hit(ray, ray_t, rec),
-//            HittableObject::Cuboid(u) => u.hit(ray, ray_t, rec),
-//            HittableObject::Translate(t) => t.hit(ray, ray_t, rec),
-//            HittableObject::RotateY(ry) => ry.hit(ray, ray_t, rec),
-//        }
-//    }
-//    fn bounding_box(&self, aabb: &mut AABB) -> bool {
-//        match self {
-//            HittableObject::Sphere(s) => s.bounding_box(aabb),
-//            //HittableObject::BVHnode(b) => b.bounding_box(aabb),
-//            HittableObject::XYRect(xy) => xy.bounding_box(aabb),
-//            HittableObject::XZRect(xz) => xz.bounding_box(aabb),
-//            HittableObject::YZRect(yz) => yz.bounding_box(aabb),
-//            //HittableObject::ConstantMedium(c) => c.bounding_box(aabb),
-//            HittableObject::Cuboid(u) => u.bounding_box(aabb),
-//            HittableObject::Translate(t) => t.bounding_box(aabb),
-//            HittableObject::RotateY(ry) => ry.bounding_box(aabb),
-//        }
-//    }
-//    fn pdf_value (&self, o: Vec3,v: Vec3) -> NumberType {
-//        match self {
-//            HittableObject::Sphere(s) => s.pdf_value(o,v),
-//            //HittableObject::BVHnode(b) => b.pdf_value(o,v),
-//            HittableObject::XYRect(xy) => xy.pdf_value(o,v),
-//            HittableObject::XZRect(xz) => xz.pdf_value(o,v),
-//            HittableObject::YZRect(yz) => yz.pdf_value(o,v),
-//            //HittableObject::ConstantMedium(c) => c.pdf_value(o,v),
-//            HittableObject::Cuboid(u) => u.pdf_value(o,v),
-//            HittableObject::Translate(t) => t.pdf_value(o,v),
-//            HittableObject::RotateY(ry) => ry.pdf_value(o,v),
-//        }
-//    }
-//    fn random (&self, o: Vec3) -> Vec3 {
-//        match self {
-//            HittableObject::Sphere(s) => s.random(o),
-//            //HittableObject::BVHnode(b) => b.random(o),
-//            HittableObject::XYRect(xy) => xy.random(o),
-//            HittableObject::XZRect(xz) => xz.random(o),
-//            HittableObject::YZRect(yz) => yz.random(o),
-//            //HittableObject::ConstantMedium(c) => c.random(o),
-//            HittableObject::Cuboid(u) => u.random(o),
-//            HittableObject::Translate(t) => t.random(o),
-//            HittableObject::RotateY(ry) => ry.random(o),
-//        }
-//
-//    }
-//
-//
-//}
 
 
 impl<'a> Hittable<'a> for HittableObject<'a>
 {
-    fn hit(&self, ray: &Ray, ray_t: Interval, rec: &mut HitRecord<'a>) -> bool {
+    fn hit(&self, ray: &Ray, ray_t: Interval) -> Option<HitRecord> {
         match self {
-            HittableObject::Sphere(s) => s.hit(ray, ray_t, rec),
-            //HittableObject::BVHnode(b) => b.hit(ray, ray_t, rec),
-            HittableObject::XYRect(xy) => xy.hit(ray, ray_t, rec),
-            HittableObject::XZRect(xz) => xz.hit(ray, ray_t, rec),
-            HittableObject::YZRect(yz) => yz.hit(ray, ray_t, rec),
-            //HittableObject::ConstantMedium(c) => c.hit(ray, ray_t, rec),
-            HittableObject::Cuboid(u) => u.hit(ray, ray_t, rec),
-            HittableObject::Translate(t) => t.hit(ray, ray_t, rec),
-            HittableObject::RotateY(ry) => ry.hit(ray, ray_t, rec),
+            HittableObject::Sphere(s) => s.hit(ray, ray_t),
+            //HittableObject::BVHnode(b) => b.hit(ray, ray_t),
+            HittableObject::XYRect(xy) => xy.hit(ray, ray_t),
+            HittableObject::XZRect(xz) => xz.hit(ray, ray_t),
+            HittableObject::YZRect(yz) => yz.hit(ray, ray_t),
+            //HittableObject::ConstantMedium(c) => c.hit(ray, ray_t),
+            HittableObject::Cuboid(u) => u.hit(ray, ray_t),
+            HittableObject::Translate(t) => t.hit(ray, ray_t),
+            HittableObject::RotateY(ry) => ry.hit(ray, ray_t),
         }
     }
     fn bounding_box(&self, aabb: &mut AABB) -> bool {
@@ -183,7 +144,6 @@ impl<'a> Hittable<'a> for HittableObject<'a>
     }
 }
 
-
 impl<'a> Default for HittableObject<'a> {
     fn default() -> Self {
         HittableObject::Sphere(Sphere::default())
@@ -213,25 +173,22 @@ impl<'a> Hittable<'a> for XYRect<'a> {
             self.k-0.0001);
         true
     }
-    fn hit(&self, ray: &Ray, ray_t: Interval, rec: &mut HitRecord<'a>) -> bool {
+    fn hit(&self, ray: &Ray, ray_t: Interval) -> Option<HitRecord> {
         let t = (self.k - ray.ro.z)/ray.rd.z;
-        if t<ray_t.min|| t>ray_t.max {return false;}
+        if t<ray_t.min|| t>ray_t.max {return None;}
 
         let x = ray.ro.x + t*ray.rd.x;
         let y = ray.ro.y + t*ray.rd.y;
 
         //if x<self.x0 || x>self.x1 || y<self.y0 || y>self.y1 {return false;}
-        if !Interval::new(self.x0,self.x1).contains(x) || !Interval::new(self.y0,self.y1).contains(y) {return false;}
+        if !Interval::new(self.x0,self.x1).contains(x) || !Interval::new(self.y0,self.y1).contains(y) {return None;}
         
-        rec.u = (x-self.x0)/(self.x1-self.x0);
-        rec.v = (y-self.y0)/(self.y1-self.y0);
 
-        rec.t = t;
+        let u = (x-self.x0)/(self.x1-self.x0);
+        let v = (y-self.y0)/(self.y1-self.y0);
+
         let outward_normal = Vec3::new(0.0,0.0,1.0);
-        rec.set_face_normal(ray, outward_normal);
-        rec.material = self.material;
-        rec.p = ray.at(t);
-        true
+        Some(HitRecord::new(&self.material, ray, t, outward_normal, u, v))
 
     }
 }
@@ -269,35 +226,36 @@ impl<'a> Hittable<'a> for XZRect<'a> {
             self.k-0.0001);
         true
     }
-    fn hit(&self, ray: &Ray, ray_t: Interval, rec: &mut HitRecord<'a>) -> bool {
+    fn hit(&self, ray: &Ray, ray_t: Interval) -> Option<HitRecord>{
         let t = (self.k - ray.ro.y)/ray.rd.y;
-        if t<ray_t.min || t>ray_t.max {return false;}
+        if t<ray_t.min || t>ray_t.max {return None;}
 
         let x = ray.ro.x + t*ray.rd.x;
         let z = ray.ro.z + t*ray.rd.z;
 
-        if x<self.x0 || x>self.x1 || z<self.z0 || z>self.z1 {return false;}
+        if x<self.x0 || x>self.x1 || z<self.z0 || z>self.z1 {return None;}
         
-        rec.u = (x-self.x0)/(self.x1-self.x0);
-        rec.v = (z-self.z0)/(self.z1-self.z0);
+        let mut rec = HitRecord::default();
+
+        let u = (x-self.x0)/(self.x1-self.x0);
+        let v = (z-self.z0)/(self.z1-self.z0);
 
         rec.t = t;
         let outward_normal = Vec3::new(0.0,1.0,0.0);
-        rec.set_face_normal(ray, outward_normal);
-        rec.material = self.material;
-        rec.p = ray.at(t);
-        true
+        Some(HitRecord::new(&self.material, ray, t, outward_normal, u, v))
+        
 
     }
     fn pdf_value (&self, o: Vec3,v: Vec3) -> NumberType {
-        let mut rec = HitRecord::default();
-        if !self.hit(&Ray{ro: o, rd: v}, Interval::EPSILON_UNIVERSE, &mut rec) {return 0.0}
-
-        let area = (self.x1-self.x0)*(self.z1-self.z0);
-        let dist2 = rec.t*rec.t*v.dot2();
-        let cosine = v.dot(rec.n).abs()/v.length();
-
-        dist2/(cosine*area)
+        match self.hit(&Ray{ro: o, rd: v}, Interval::EPSILON_UNIVERSE) {
+            None => 0.0,
+            Some(rec) => {
+                let area = (self.x1-self.x0)*(self.z1-self.z0);
+                let dist2 = rec.t*rec.t*v.dot2();
+                let cosine = v.dot(rec.n).abs()/v.length();
+                dist2/(cosine*area)
+            }
+        }
     }
     fn random (&self, o: Vec3) -> Vec3 {
         let random_point = Vec3::new(random_range(self.x0,self.x1), self.k, random_range(self.z0, self.z1)); 
@@ -329,25 +287,19 @@ impl<'a> Hittable<'a> for YZRect<'a> {
             self.k-0.0001);
         true
     }
-    fn hit(&self, ray: &Ray, ray_t: Interval, rec: &mut HitRecord<'a>) -> bool {
+    fn hit(&self, ray: &Ray, ray_t: Interval) -> Option<HitRecord>{
         let t = (self.k - ray.ro.x)/ray.rd.x;
-        if t<ray_t.min|| t>ray_t.max {return false;}
+        if t<ray_t.min|| t>ray_t.max {return None;}
 
         let y = ray.ro.y + t*ray.rd.y;
         let z = ray.ro.z + t*ray.rd.z;
 
-        if y<self.y0 || y>self.y1 || z<self.z0 || z>self.z1 {return false;}
-        
-        rec.u = (y-self.y0)/(self.y1-self.y0);
-        rec.v = (z-self.z0)/(self.z1-self.z0);
+        if y<self.y0 || y>self.y1 || z<self.z0 || z>self.z1 {return None;}
+        let u = (y-self.y0)/(self.y1-self.y0);
+        let v = (z-self.z0)/(self.z1-self.z0);
 
-        rec.t = t;
         let outward_normal = Vec3::new(1.0,0.0,0.0);
-        rec.set_face_normal(ray, outward_normal);
-        rec.material = self.material;
-        rec.p = ray.at(t);
-        true
-
+        Some(HitRecord::new(&self.material, ray, t, outward_normal, u, v))
     }
 }
 
@@ -361,27 +313,25 @@ pub struct Sphere<'a> {
 }
 
 impl<'a> Hittable<'a> for Sphere<'a> {
-    fn hit(&self, ray: &Ray, ray_t: Interval, rec: &mut HitRecord<'a>) -> bool
+    fn hit(&self, ray: &Ray, ray_t: Interval) -> Option<HitRecord>
     {
         let oc = ray.ro - self.center;
         let a = ray.rd.dot2();
         let half_b = oc.dot(ray.rd);
         let c = oc.dot2()-self.radius.powi(2);
         let discriminant = half_b*half_b - a*c;
-        if discriminant < 0.0 {return false;}
+        if discriminant < 0.0 {return None;}
         let sqrtd = discriminant.sqrt();
         let mut root = (-half_b-sqrtd)/a;
         if root<ray_t.min  || ray_t.max<root {
             root = (-half_b + sqrtd)/a;
-            if root<ray_t.min || ray_t.max<root {return false;}
+            if root<ray_t.min || ray_t.max<root {return None;}
         }
-        rec.t = root;
-        rec.p = ray.at(root);
-        let outward_normal = (rec.p - self.center)/self.radius;
-        rec.set_face_normal(ray, outward_normal);
-        self.get_uv(outward_normal, &mut rec.u, &mut rec.v);
-        rec.material = self.material;
-        true
+        let t = root;
+        let p = ray.at(root);
+        let outward_normal = (p - self.center)/self.radius;
+        let (u,v) = self.get_uv(outward_normal);
+        Some(HitRecord::new(&self.material, ray, t, outward_normal, u, v))
     }
     fn bounding_box(&self,  aabb: &mut AABB) -> bool
     {
@@ -393,13 +343,14 @@ impl<'a> Hittable<'a> for Sphere<'a> {
 }
 
 impl<'a> Sphere<'a> {
-    fn get_uv(&self, p: Vec3, u: &mut NumberType, v: &mut NumberType)
+    fn get_uv(&self, p: Vec3) -> (NumberType, NumberType)
     {
         let theta = (-p.y).acos();
         let phi = (-p.z).atan2(p.x) + PI;
 
-        *u = phi / (2.0*PI);
-        *v = theta / PI;
+        let u = phi / (2.0*PI);
+        let v = theta / PI;
+        (u,v)
     }
 }
 
@@ -410,16 +361,16 @@ pub struct HittableList<'a> {
 }
 
 impl<'a> Hittable<'a> for HittableList<'a> {
-    fn hit(&self, ray: &Ray, ray_t: Interval, rec: &mut HitRecord<'a>) -> bool {
-        let mut hit_anything = false;
+    fn hit(&self, ray: &Ray, ray_t: Interval) -> Option<HitRecord> {
         let mut closest = ray_t.max;
+        let mut rec: Option<HitRecord> = None;
         for object in &self.l {
-            if object.hit(ray, Interval::new(ray_t.min, closest), rec) {
-                hit_anything = true;
-                closest = rec.t;
+            if let Some(x) = object.hit(ray, Interval::new(ray_t.min, closest)) {
+                rec = Some(x);
+                closest = x.t;
             }
         }
-        hit_anything
+        rec
     }
 }
 
@@ -428,10 +379,10 @@ impl<'a> Hittable<'a> for HittableList<'a> {
 pub struct Cuboid<'a> {
     min: Vec3,
     max: Vec3,
-    center: Vec3,
-    size: Vec3,
+//    center: Vec3,
+//    size: Vec3,
     sides: HittableList<'a>,
-    material: MaterialEnum<'a>,
+//    material: MaterialEnum<'a>,
 }
 impl<'a> Cuboid<'a> {
     pub fn new(min: Vec3, max: Vec3, material: MaterialEnum<'a>) -> Self {
@@ -460,23 +411,23 @@ impl<'a> Cuboid<'a> {
         sides.l.push(HittableObject::YZRect(YZRect {y0: min.y, y1: max.y, z0: min.z, z1: max.x, k:max.x,material}));
         sides.l.push(HittableObject::YZRect(YZRect {y0: min.y, y1: max.y, z0: min.z, z1: max.x, k:min.x,material}));
         
-        let center = (min + max)/2.0;
+        //let center = (min + max)/2.0;
 
-        let size = max - min;
+        //let size = max - min;
 
         Cuboid {
             min,
             max,
-            center,
-            size,
+//            center,
+//            size,
             sides,
-            material,
+//            material,
         }
     }
 }
 
 impl<'a> Hittable<'a> for Cuboid<'a> {
-    fn hit(&self, ray: &Ray, ray_t: Interval, rec: &mut HitRecord<'a>) -> bool
+    fn hit(&self, ray: &Ray, ray_t: Interval) -> Option<HitRecord>
     {
 
         //let radius = self.size.x; 
@@ -518,79 +469,79 @@ impl<'a> Hittable<'a> for Cuboid<'a> {
         ////get_uv(outward_normal, &mut rec.u, &mut rec.v);
         //rec.material = self.material;
         //true
-        
-        
-/*        let mut tmin = 0.0;
-        let mut tmax = 0.0;
 
 
-        let tx1 = (-1.0 - ray.ro.x)/ray.rd.x;
-        let tx2 = (1.0 - ray.ro.x)/ray.rd.x;
+        /*        let mut tmin = 0.0;
+                  let mut tmax = 0.0;
 
-        let mut nmin = Vec3::default();
-        let mut nmax = Vec3::default();
 
-        if tx1 < tx2 {
-            tmin = tx1;
-            tmax = tx2;
-            nmin = Vec3::new(-1.0, 0.0, 0.0);
-            nmax = Vec3::new(1.0, 0.0, 0.0);
-        } else {
-            tmin = tx2;
-            tmax = tx1;
-            nmin = Vec3::new(1.0, 0.0, 0.0);
-            nmax = Vec3::new(-1.0, 0.0, 0.0);
-        }
+                  let tx1 = (-1.0 - ray.ro.x)/ray.rd.x;
+                  let tx2 = (1.0 - ray.ro.x)/ray.rd.x;
 
-        if tmin > tmax {return false;}
+                  let mut nmin = Vec3::default();
+                  let mut nmax = Vec3::default();
 
-        let ty1 = (-1.0 - ray.ro.y)/ray.rd.y;
-        let ty2 = (1.0 - ray.ro.y)/ray.rd.y;
+                  if tx1 < tx2 {
+                  tmin = tx1;
+                  tmax = tx2;
+                  nmin = Vec3::new(-1.0, 0.0, 0.0);
+                  nmax = Vec3::new(1.0, 0.0, 0.0);
+                  } else {
+                  tmin = tx2;
+                  tmax = tx1;
+                  nmin = Vec3::new(1.0, 0.0, 0.0);
+                  nmax = Vec3::new(-1.0, 0.0, 0.0);
+                  }
 
-        if ty1 < ty2 {
-            if ty1 > tmin {
-                tmin = ty1;
-                nmin = Vec3::new(0.0, -1.0, 0.0);
-            }
-            if ty2 < tmax {
-                tmax = ty2;
-                nmax = Vec3::new(0.0, 1.0, 0.0);
-            }
-        } else {
-            if ty2 > tmin {
-                tmin = ty2;
-                nmin = Vec3::new(0.0, 1.0, 0.0);
-            }
-            if ty1 < tmax {
-                tmax = ty1;
-                nmax = Vec3::new(0.0, -1.0, 0.0);
-            }
-        }
+                  if tmin > tmax {return false;}
 
-        if tmin > tmax {return false;}
+                  let ty1 = (-1.0 - ray.ro.y)/ray.rd.y;
+                  let ty2 = (1.0 - ray.ro.y)/ray.rd.y;
 
-        let tz1 = (-1.0 - ray.ro.z)/ray.rd.z;
-        let tz2 = (1.0 - ray.ro.z)/ray.rd.z;
+                  if ty1 < ty2 {
+                  if ty1 > tmin {
+                  tmin = ty1;
+                  nmin = Vec3::new(0.0, -1.0, 0.0);
+                  }
+                  if ty2 < tmax {
+                  tmax = ty2;
+                  nmax = Vec3::new(0.0, 1.0, 0.0);
+                  }
+                  } else {
+                  if ty2 > tmin {
+                  tmin = ty2;
+                  nmin = Vec3::new(0.0, 1.0, 0.0);
+                  }
+                  if ty1 < tmax {
+                  tmax = ty1;
+                  nmax = Vec3::new(0.0, -1.0, 0.0);
+                  }
+                  }
 
-        if tz1 < tz2 {
-            if tz1 > tmin {
-                tmin = tz1;
-                nmin = Vec3::new(0.0, 0.0, -1.0);
-            }
-            if tz2 < tmax {
-                tmax = tz2;
-                nmax = Vec3::new(0.0, 0.0, 1.0);
-            }
-        } else {
-            if tz2 > tmin {
-                tmin = tz2;
-                nmin = Vec3::new(0.0, 0.0, 1.0);
-            }
-            if tz1 < tmax {
-                tmax = tz1;
-                nmax = Vec3::new(0.0, 0.0, -1.0);
-            }
-        }
+                  if tmin > tmax {return false;}
+
+                  let tz1 = (-1.0 - ray.ro.z)/ray.rd.z;
+                  let tz2 = (1.0 - ray.ro.z)/ray.rd.z;
+
+                  if tz1 < tz2 {
+                  if tz1 > tmin {
+                  tmin = tz1;
+                  nmin = Vec3::new(0.0, 0.0, -1.0);
+                  }
+                  if tz2 < tmax {
+                  tmax = tz2;
+                  nmax = Vec3::new(0.0, 0.0, 1.0);
+                  }
+                  } else {
+                  if tz2 > tmin {
+                  tmin = tz2;
+                  nmin = Vec3::new(0.0, 0.0, 1.0);
+                  }
+                  if tz1 < tmax {
+                  tmax = tz1;
+                  nmax = Vec3::new(0.0, 0.0, -1.0);
+                  }
+                  }
 
         if tmin > tmax {return false;}
 
@@ -598,7 +549,7 @@ impl<'a> Hittable<'a> for Cuboid<'a> {
             tmin = tmax;
             nmin = nmax;
         }
-        
+
         if tmin < 0.0 {
             return false;
         }
@@ -610,77 +561,77 @@ impl<'a> Hittable<'a> for Cuboid<'a> {
         rec.material = self.material;
         true*/
 
-        //rec.t = root;
-        //rec.p = ray.at(root);
-        //let outward_normal = (rec.p - center)/radius;
-        //rec.set_face_normal(ray, outward_normal);
-        ////get_uv(outward_normal, &mut rec.u, &mut rec.v);
-        //rec.material = self.material;
+            //rec.t = root;
+            //rec.p = ray.at(root);
+            //let outward_normal = (rec.p - center)/radius;
+            //rec.set_face_normal(ray, outward_normal);
+            ////get_uv(outward_normal, &mut rec.u, &mut rec.v);
+            //rec.material = self.material;
 
-        //let n = invdir*ray.ro;
+            //let n = invdir*ray.ro;
 
-        //let k = Vec3::new(m.x.abs(), m.y.abs(), m.z.abs());
+            //let k = Vec3::new(m.x.abs(), m.y.abs(), m.z.abs());
 
-        //let t1 = -n +k;
-        //let t2 = -n -k;
-
-
-
-        if false {
-            
-            
-            fn step(a: NumberType, b: NumberType) -> NumberType {
-                if a>b {0.0} else {1.0}
-            }
-            fn step3(a: Vec3, b: Vec3) -> Vec3 {
-                Vec3::new(step(a.x, b.x),
-                step(a.y, b.y),
-                step(a.z, b.z))
-            }
-            fn sign3(a: Vec3) -> Vec3 {
-                Vec3::new(
-                    a.x.signum(),
-                    a.y.signum(),
-                    a.z.signum()
-                    )
-            }
-
-            let m = Vec3::new(1.0/ray.rd.x,1.0/ray.rd.y,1.0/ray.rd.z);
-            let n = m*ray.ro;
-            let k = Vec3::new(m.x.abs(), m.y.abs(), m.z.abs())*self.size*2.0;
-
-
-            let t1 = -n -k;
-            let t2 = -n +k;
-
-            let t_n = t1.x.max(t1.y).max(t1.z);
-            let t_f = t2.x.min(t2.y).min(t2.z);
-
-            if t_n>t_f || t_f<0.0 {
-                return false;
-            }
-
-            if !self.sides.hit(ray, ray_t, rec) {
-                return false;
-            }
-            
-
-            rec.n = Vec3::one(1.0);/*-sign3(ray.rd)*
-                step3(Vec3::new(t1.y,t1.z,t1.x),Vec3::new(t1.x,t1.y,t1.z));
-                step3(Vec3::new(t1.z,t1.x,t1.y),Vec3::new(t1.x,t1.y,t1.z));*/
-
-            rec.set_face_normal(ray, rec.n);
-            rec.t = 200.0;//ray_t.max.min(ray_t.min);
-            rec.p = ray.at(rec.t);
-            rec.material = self.material;
+            //let t1 = -n +k;
+            //let t2 = -n -k;
 
 
 
-            true
-        } 
-        else {
-            self.sides.hit(ray, ray_t, rec)
-        }
+            //if false {
+            //    
+            //    
+            //    fn step(a: NumberType, b: NumberType) -> NumberType {
+            //        if a>b {0.0} else {1.0}
+            //    }
+            //    fn step3(a: Vec3, b: Vec3) -> Vec3 {
+            //        Vec3::new(step(a.x, b.x),
+            //        step(a.y, b.y),
+            //        step(a.z, b.z))
+            //    }
+            //    fn sign3(a: Vec3) -> Vec3 {
+            //        Vec3::new(
+            //            a.x.signum(),
+            //            a.y.signum(),
+            //            a.z.signum()
+            //            )
+            //    }
+
+            //    let m = Vec3::new(1.0/ray.rd.x,1.0/ray.rd.y,1.0/ray.rd.z);
+            //    let n = m*ray.ro;
+            //    let k = Vec3::new(m.x.abs(), m.y.abs(), m.z.abs())*self.size*2.0;
+
+
+            //    let t1 = -n -k;
+            //    let t2 = -n +k;
+
+            //    let t_n = t1.x.max(t1.y).max(t1.z);
+            //    let t_f = t2.x.min(t2.y).min(t2.z);
+
+            //    if t_n>t_f || t_f<0.0 {
+            //        return false;
+            //    }
+
+            //    if !self.sides.hit(ray, ray_t, rec) {
+            //        return false;
+            //    }
+            //    
+
+            //    rec.n = Vec3::one(1.0);/*-sign3(ray.rd)*
+            //        step3(Vec3::new(t1.y,t1.z,t1.x),Vec3::new(t1.x,t1.y,t1.z));
+            //        step3(Vec3::new(t1.z,t1.x,t1.y),Vec3::new(t1.x,t1.y,t1.z));*/
+
+            //    rec.set_face_normal(ray, rec.n);
+            //    rec.t = 200.0;//ray_t.max.min(ray_t.min);
+            //    rec.p = ray.at(rec.t);
+            //    rec.material = self.material;
+
+
+
+            //    true
+            //} 
+            //else {
+            self.sides.hit(ray, ray_t)
+            //}
     }
     fn bounding_box(&self,  aabb: &mut AABB) -> bool {
         *aabb = AABB{minimum:self.min, maximum:self.max};
@@ -697,8 +648,9 @@ pub struct ConstantMedium<'a> {
 }
 
 impl<'a> Hittable<'a> for ConstantMedium<'a> {
-    fn hit(&self, ray: &Ray, ray_t: Interval, rec: &mut HitRecord<'a>) -> bool
+    fn hit(&self, _ray: &Ray, _ray_t: Interval) -> Option<HitRecord>
     {
+        /*
         //let enable_debug = false;
         //let debugging = enable_debug && random_val()<0.00001;
         
@@ -730,6 +682,8 @@ impl<'a> Hittable<'a> for ConstantMedium<'a> {
         rec.n = Vec3::new(1.0,0.0,0.0);
         rec.material = self.material;
         true
+        */
+        unimplemented!()
     }
     fn bounding_box(&self,  aabb: &mut AABB) -> bool {
         self.boundary.bounding_box(aabb)
@@ -750,12 +704,18 @@ pub struct Translate<'a> {
 
 impl<'a> Hittable<'a> for Translate<'a> {
 
-    fn hit(&self, ray: &Ray, ray_t: Interval, rec: &mut HitRecord<'a>) -> bool {
+    fn hit(&self, ray: &Ray, ray_t: Interval) -> Option<HitRecord> {
         let moved = Ray{ro: ray.ro - self.offset, rd: ray.rd};
-        if !self.object.hit(&moved, ray_t, rec) {return false;}
-        rec.p+=self.offset;
-        rec.set_face_normal(&moved, rec.n);
-        true
+        
+        match self.object.hit(&moved, ray_t) {
+            None => None,
+            Some(mut rec) => {
+                rec.p+=self.offset;
+                rec.update_normal(&moved);
+                Some(rec)
+
+            }
+        }
     }
     fn bounding_box(&self, aabb: &mut AABB) -> bool {
         if !self.object.bounding_box(aabb) {return false;}
@@ -820,7 +780,7 @@ impl<'a> RotateY<'a> {
     }
 }
 impl<'a> Hittable<'a> for RotateY<'a> {
-    fn hit(&self, ray: &Ray, ray_t: Interval, rec: &mut HitRecord<'a>) -> bool {
+    fn hit(&self, ray: &Ray, ray_t: Interval) -> Option<HitRecord> {
         let mut ro = ray.ro;
         let mut rd = ray.rd;
 
@@ -832,26 +792,31 @@ impl<'a> Hittable<'a> for RotateY<'a> {
 
         let rotated = Ray{ro,rd};
 
-        if !self.object.hit(&rotated, ray_t, rec) {return false;}
+        match self.object.hit(&rotated, ray_t) {
+            None => None,
+            Some(mut rec) => {
+                let mut p = rec.p;
+                let mut n = rec.n;
 
-        let mut p = rec.p;
-        let mut n = rec.n;
+                p[0] = self.cos_theta*rec.p[0] + self.sin_theta*rec.p[2];
+                p[2] = -self.sin_theta*rec.p[0] + self.cos_theta*rec.p[2];
+                n[0] = self.cos_theta*rec.n[0] + self.sin_theta*rec.n[2];
+                n[2] = -self.sin_theta*rec.n[0] + self.cos_theta*rec.n[2];
 
-        p[0] = self.cos_theta*rec.p[0] + self.sin_theta*rec.p[2];
-        p[2] = -self.sin_theta*rec.p[0] + self.cos_theta*rec.p[2];
+                rec.p = p;
+                rec.n = n;
 
-        n[0] = self.cos_theta*rec.n[0] + self.sin_theta*rec.n[2];
-        n[2] = -self.sin_theta*rec.n[0] + self.cos_theta*rec.n[2];
+                rec.update_normal(&rotated);
+                Some(rec)
+            }
 
-        rec.p = p;
-        rec.set_face_normal(&rotated, n);
+        }
 
-        true
     }
 
     fn bounding_box(&self, aabb: &mut AABB) -> bool {
         //TODO: AABB default
-        *aabb = self.aabb.unwrap_or(AABB::default());
+        *aabb = self.aabb.unwrap_or_default();
         self.aabb.is_some()
     }
 }

@@ -31,7 +31,7 @@ impl<'a> Texture for TextureEnum<'a> {
 pub struct SolidColor {color_value: Vec3,}
 impl Texture for SolidColor {fn value(&self, _u: NumberType, _v: NumberType, _p: Vec3) -> Vec3 {self.color_value}}
 impl<'a> SolidColor {
-    pub fn new(color_value: Vec3) -> TextureEnum<'a> {TextureEnum::SolidColor(SolidColor {color_value})}
+    pub fn create(color_value: Vec3) -> TextureEnum<'a> {TextureEnum::SolidColor(SolidColor {color_value})}
 }
 
 // no default 
@@ -49,7 +49,7 @@ impl<'a> Texture for CheckerTexture<'a> {
     }
 }
 impl<'a> CheckerTexture<'a> {
-    pub fn new(odd: &'a TextureEnum<'a>, even: &'a TextureEnum<'a>) -> TextureEnum<'a> {
+    pub fn create(odd: &'a TextureEnum<'a>, even: &'a TextureEnum<'a>) -> TextureEnum<'a> {
         TextureEnum::CheckerTexture(CheckerTexture {odd,even,})
     }
     // inputting 2 arbitrary colors is not possible without allocation

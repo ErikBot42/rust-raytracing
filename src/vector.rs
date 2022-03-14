@@ -4,8 +4,8 @@ use rand_distr::StandardNormal;
 use num_traits::real::Real;
 use std::ops::{Add, AddAssign, Div, Mul, Neg, Sub, SubAssign, Index, IndexMut};
 
-use crate::random::rng;
-use crate::common::NumberType;
+use crate::random::*;
+use crate::common::*;
 
 pub type Vec3 = V3<NumberType>;
 
@@ -199,6 +199,20 @@ impl Vec3 {
     pub fn random_unit() -> Vec3 {
         Vec3::random_dir().normalized()
     }
+
+
+    //pub fn random_cosine_direction() -> Vec3 {
+    //    let r1 = random_val();
+    //    let r2 = random_val();
+    //    let z = (1.0-r2).sqrt();
+
+    //    let phi = 2.0*PI*r1;
+    //    let x = phi.cos()*r2.sqrt();
+    //    let y = phi.sin()*r2.sqrt();
+
+    //    Vec3::new(x,y,z)
+    //}
+
     pub fn random_cosine_direction() -> Vec3 {
         let mut v = Vec3::random_unit();
         v.z = v.z.abs();

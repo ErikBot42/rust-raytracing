@@ -1,8 +1,9 @@
 
 extern crate image;
-extern crate lazy_static;
+//extern crate lazy_static;
 extern crate rand;
-extern crate smallvec;
+//extern crate smallvec;
+//extern crate thread_local;
 
 pub mod common;
 pub mod interval;
@@ -63,16 +64,23 @@ use crate::render::*;
 //    cornell_box
 //
 //}
+use std::env;
 
 fn main() {
+
+    let args: Vec<String> = env::args().collect();
+    
+    let samples = args[1].parse::<u32>().unwrap();
+
+
     rng_seed();
 
     let big_light = false;
-    let c1 = SolidColor::new(Vec3::one(0.8));
-    let c2 = SolidColor::new(Vec3::new(0.1,0.1,0.6));
+    let c1 = SolidColor::create(Vec3::one(0.8));
+    let c2 = SolidColor::create(Vec3::new(0.1,0.1,0.6));
     let checker = 
-        CheckerTexture::new(& c1, & c2 );
-    let checker = Lambertian::new(checker);
+        CheckerTexture::create(& c1, & c2 );
+    let checker = Lambertian::create(checker);
 
     //let glass = MaterialEnum::Dielectric(Dielectric{ir:1.5});
     let white = checker;//Lambertian::col(Vec3::one(0.73));
@@ -116,7 +124,7 @@ fn main() {
     let mut hittable_list = cornell_box;
     let bvh2: BVHHeap<HEAP_SIZE> = {BVHHeap::construct_new(&mut hittable_list[0..8])};
 
-    render(&lights, &bvh2);
+    render(&lights, &bvh2, samples);
 
 }
 

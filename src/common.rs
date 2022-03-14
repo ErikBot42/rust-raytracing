@@ -1,7 +1,7 @@
 
 pub type NumberType = f32;
 
-
+#[allow(clippy::excessive_precision)]
 pub const PI: NumberType = 3.1415926535897932385;
 
 

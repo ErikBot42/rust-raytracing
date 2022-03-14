@@ -44,7 +44,7 @@ impl PDF for CosinePDF {
     }
 }
 impl<'a> CosinePDF {
-    pub fn new(w: Vec3) -> PDFEnum<'a> {
+    pub fn create(w: Vec3) -> PDFEnum<'a> {
         PDFEnum::CosinePDF(CosinePDF { onb: ONB::build_from_w(w)})
     }
 }
@@ -63,7 +63,7 @@ impl<'a> PDF for HittablePDF<'a> {
     }
 }
 impl<'a> HittablePDF<'a> {
-    pub fn new(object:&'a HittableObject<'a>, o: Vec3) -> PDFEnum<'a> {
+    pub fn create(object:&'a HittableObject<'a>, o: Vec3) -> PDFEnum<'a> {
         PDFEnum::HittablePDF(HittablePDF {object, o,})
     }
 }

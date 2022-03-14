@@ -9,19 +9,25 @@ edition = "2021"
 image = "*"
 num-traits = "*"
 rand = {version = "*", features = ["small_rng"]}
-lazy_static = "*"
-mut_static = "*"
-smallvec = "*"
+#lazy_static = "*"
+#mut_static = "*"
+#smallvec = "*"
 ordered-float = "*"
 rand_distr = "*"
-micromath = "*"
-array-concat = "*"
+#micromath = "*"
+#array-concat = "*"
 rayon = "*"
+#thread_local = "*"
 
-[rust]
-debuginfo-level = 1
+
+#[rust]
+#debuginfo-level = 1
 
 [profile.release]
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+
 #debug = 1
 #lto = true
 #panic = "abort"
