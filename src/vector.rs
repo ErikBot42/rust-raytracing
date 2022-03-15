@@ -250,8 +250,9 @@ impl Vec3 {
 
     pub fn random_cosine_direction() -> Vec3 {
         let mut v = Vec3::random_unit();
-        v.z = v.z.abs();
-        v
+        v.z += 1.0;
+        //v.z = v.z.abs();
+        v.normalized()
     }
     pub fn random_in_unit_disk() -> Vec3 {
         Vec3::new(

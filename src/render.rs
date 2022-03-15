@@ -194,7 +194,7 @@ fn render_line<'a, const LEN: usize>(buffer: &mut [ColorValueType], lights: &'a 
             let ray = scene.cam.get_ray(u,v);
 
 
-            let mut ray_col = ray_color(&ray, bvh2, lights, scene.max_depth, Vec3::one(0.0));
+            let mut ray_col = ray_color(&ray, bvh2, lights, scene.max_depth);
             
             if ray_col.x.is_nan() {ray_col.x = 0.0;} 
             if ray_col.y.is_nan() {ray_col.y = 0.0;} 
@@ -219,53 +219,64 @@ fn ray_color<'a, const LEN: usize>(
     world: &BVHHeap<LEN>,
     light: &'a HittableObject<'a>,
     depth: u32,
-    acc: Vec3 //TODO iterative + background function
     ) -> Vec3 {
-    if depth==0 {return Vec3::default();}
 
-    let rec = match world.hit(ray, Interval::EPSILON_UNIVERSE) {
-        None => return Vec3::new(0.0,0.0,0.0),
-        Some(rec) => rec,
-    };
     
-    if true {
-        let mut scattered = Ray::default();
-        let emitted = rec.material.emission();
-        let mut pdf = 0.0;
-        let mut albedo = Vec3::one(0.0);
+    fn ray_color_rec<'a, const LEN: usize>(
+        ray: &Ray,
+        world: &BVHHeap<LEN>,
+        light: &'a HittableObject<'a>,
+        depth: u32,
+        acc: Vec3 //TODO iterative + background function
+        ) -> Vec3 {
+        if depth==0 {return Vec3::default();}
 
-        if !rec.material.scatter(ray, &rec, &mut albedo, &mut scattered, &mut pdf) {return emitted;}
+        let rec = match world.hit(ray, Interval::EPSILON_UNIVERSE) {
+            None => return Vec3::new(0.0,0.0,0.0),
+            Some(rec) => rec,
+        };
 
-        //let p = CosinePDF::new(rec.n);
-        //scattered = Ray{ro: rec.p, rd: p.generate()};
-        //pdf = p.value(scattered.rd);
+        if true {
+            let mut scattered = Ray::default();
+            let emitted = rec.material.emission();
+            let mut pdf = 0.0;
+            let mut albedo = Vec3::one(0.0);
 
-        //let light_pdf = HittablePDF::new(light, rec.p);
-        //let scattered = Ray{ro: rec.p, rd:light_pdf.generate()};
-        //let pdf = light_pdf.value(scattered.rd);
+            if !rec.material.scatter(ray, &rec, &mut albedo, &mut scattered, &mut pdf) {return emitted;}
 
-        let pdf_light = HittablePDF::create(light, rec.p);
-        let pdf_cosine = CosinePDF::create(rec.n);
-        //let mix_pdf = pdf_light;
-        let mix_pdf = MixPDF::new(&pdf_light, &pdf_cosine, 0.5);
-        //let c1 = {
-        ////let mix_pdf = pdf_light;
-        //let scattered = Ray{ro: rec.p, rd: mix_pdf.generate()};
-        //let pdf = mix_pdf.value(scattered.rd);
-        //emitted 
-        //    + albedo*rec.material.scattering_pdf(ray, &rec, &scattered)
-        //    *ray_color(&scattered, world, light, (depth-1).min(1), acc)/pdf};
+            //let p = CosinePDF::new(rec.n);
+            //scattered = Ray{ro: rec.p, rd: p.generate()};
+            //pdf = p.value(scattered.rd);
 
-        //let mix_pdf = pdf_cosine;
-        let scattered = Ray::new(rec.p, mix_pdf.generate());
-        let pdf = mix_pdf.value(scattered.rd);
+            //let light_pdf = HittablePDF::new(light, rec.p);
+            //let scattered = Ray{ro: rec.p, rd:light_pdf.generate()};
+            //let pdf = light_pdf.value(scattered.rd);
 
-        emitted 
-            + albedo*rec.material.scattering_pdf(ray, &rec, &scattered)
-            *ray_color(&scattered, world, light, depth-1, acc)/pdf}
+            let pdf_light = HittablePDF::create(light, rec.p);
+            let pdf_cosine = CosinePDF::create(rec.n);
+            //let mix_pdf = pdf_light;
+            let mix_pdf = MixPDF::new(&pdf_light, &pdf_cosine, 0.5);
+            //let c1 = {
+            ////let mix_pdf = pdf_light;
+            //let scattered = Ray{ro: rec.p, rd: mix_pdf.generate()};
+            //let pdf = mix_pdf.value(scattered.rd);
+            //emitted 
+            //    + albedo*rec.material.scattering_pdf(ray, &rec, &scattered)
+            //    *ray_color(&scattered, world, light, (depth-1).min(1), acc)/pdf};
 
-    else {
-        (rec.n+Vec3::one(1.0))*rec.t*0.1
+            //let mix_pdf = pdf_cosine;
+            let scattered = Ray::new(rec.p, mix_pdf.generate());
+            let pdf = mix_pdf.value(scattered.rd);
+
+            emitted 
+                + albedo*rec.material.scattering_pdf(ray, &rec, &scattered)*ray_color_rec(&scattered, world, light, depth-1, acc)/pdf}
+
+        else {
+            (rec.n+Vec3::one(1.0))*rec.t*0.1
+        }
     }
+
+
+    ray_color_rec(ray, world, light, depth, Vec3::one(0.0))
 }
 

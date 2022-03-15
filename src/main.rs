@@ -111,11 +111,13 @@ fn main() {
     const SIZE_CORNELL: usize = 9;
     let cornell_box = [
         cube,
-        HittableObject::XZRect(XZRect{material: light, x0: 213.0, x1: 343.0, z0: 227.0, z1: 332.0, k: 554.0, }),
+        lights.clone(),
+        //HittableObject::XZRect(XZRect{material: light, x0: 213.0, x1: 343.0, z0: 227.0, z1: 332.0, k: 554.0, }),
         cube2,
         //HittableObject::YZRect(YZRect{material: green, y0: 0.0, y1: 555.0, z0: 0.0, z1: 555.0, k: 555.0, }),
-        HittableObject::Quad(Quad::new(Vec3::new(555.0, 0.0, 0.0), Vec3::new(0.0,555.0,0.0), Vec3::new(0.0,0.0,555.0), white)), 
-        HittableObject::YZRect(YZRect{material: red, y0: 0.0, y1: 555.0, z0: 0.0, z1: 555.0, k: 0.0, }),
+        HittableObject::Quad(Quad::new(Vec3::new(555.0, 0.0, 0.0), Vec3::new(0.0,555.0,0.0), Vec3::new(0.0,0.0,555.0), green)), 
+        //HittableObject::YZRect(YZRect{material: red, y0: 0.0, y1: 555.0, z0: 0.0, z1: 555.0, k: 0.0, }),
+        HittableObject::Quad(Quad::new(Vec3::new(0.0, 0.0, 0.0), Vec3::new(0.0,555.0,0.0), Vec3::new(0.0,0.0,555.0), red)), 
         HittableObject::XZRect(XZRect{material: white, x0: 0.0, x1: 555.0, z0: 0.0, z1: 555.0, k: 555.0, }),
         HittableObject::XZRect(XZRect{material: white, x0: 0.0, x1: 555.0, z0: 0.0, z1: 555.0, k: 0.0, }),
         HittableObject::XYRect(XYRect{material: white, x0: 0.0, x1: 555.0, y0: 0.0, y1: 555.0, k: 555.0, }),
