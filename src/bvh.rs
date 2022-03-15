@@ -106,11 +106,11 @@ impl<'a, const LEN: usize> BVHHeap<'a, LEN> {
     }
     pub fn construct_new(objects: &mut [HittableObject<'a>]) -> Self {
         let mut bvh = Self::default();
-        bvh.construct(objects, 0);
+        bvh.construct(objects, 0, 0);
         bvh
         
     }
-    pub fn construct(&mut self, objects: &mut [HittableObject<'a>], index: usize) {
+    fn construct(&mut self, objects: &mut [HittableObject<'a>], index: usize, axis: u8) {
 
         let cardinality = objects.len();
         assert!(cardinality!=0, "empty list of hittable objects");
@@ -129,7 +129,7 @@ impl<'a, const LEN: usize> BVHHeap<'a, LEN> {
             }
             else {
 
-                let axis = rng().gen_range(0..3);
+                //let axis = rng().gen_range(0..3);
                 let x = 
                     move |a: &HittableObject, b: &HittableObject| {
                     let mut a_box = AABB::default();
@@ -143,8 +143,8 @@ impl<'a, const LEN: usize> BVHHeap<'a, LEN> {
                 
                 let mid = cardinality/2;
                 
-                self.construct(&mut objects[..mid], Bvh::left(index));
-                self.construct(&mut objects[mid..], Bvh::right(index));
+                self.construct(&mut objects[..mid], Bvh::left(index), (axis+1)%3);
+                self.construct(&mut objects[mid..], Bvh::right(index), (axis-1)%3);
             }
 
             // left and right has been constucted at this point.
@@ -194,8 +194,6 @@ impl BVHHeapNode {
 //    fn bounding_box(&self, aabb: &mut AABB) -> bool {
 //    }  
 }
-
-
 
 
 // needs hittable

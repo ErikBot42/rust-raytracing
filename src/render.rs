@@ -63,10 +63,10 @@ impl Camera {
         //
 
         // rd is mostly a matrix multiplication, (u,v)*[horizontal,vertical]
-        Ray {
-            ro: self.origin + offset, 
-            rd: self.lower_left_corner + self.horizontal*u + self.vertical*v - self.origin - offset,
-        }
+        Ray::new(
+            self.origin + offset, 
+            self.lower_left_corner + self.horizontal*u + self.vertical*v - self.origin - offset,
+        )
     }
 }
 
@@ -92,7 +92,7 @@ pub fn render<'a, const LEN: usize>(lights: &'a HittableObject<'a>, bvh2: &BVHHe
     //let scene;
 
     const ASPECT_RATIO: NumberType = 1.0;//16.0/9.0;
-    const IMGX: usize = 2160;
+    const IMGX: usize = 600;//2160;
     const IMGY: usize = ((IMGX as NumberType)/ASPECT_RATIO) as usize;
     
 
@@ -108,7 +108,7 @@ pub fn render<'a, const LEN: usize>(lights: &'a HittableObject<'a>, bvh2: &BVHHe
 
     let scene = Scene{
         samples,
-        max_depth: 16,
+        max_depth: 8,//16,
         cam,
         imgx: IMGX,
         imgy: IMGY,
@@ -128,8 +128,8 @@ pub fn render<'a, const LEN: usize>(lights: &'a HittableObject<'a>, bvh2: &BVHHe
     
     let start = Instant::now();
     unsafe {
-    BUFFER.par_iter_mut()
-    //buffer.iter_mut()
+    //BUFFER.par_iter_mut()
+    BUFFER.iter_mut()
         //.with_min_len(2)
         .zip((0u32..u32::MAX).into_iter())
         .for_each(|(line,y)| {
@@ -160,13 +160,21 @@ pub fn render<'a, const LEN: usize>(lights: &'a HittableObject<'a>, bvh2: &BVHHe
 
 
     let num_objects = LEN/2;
+    let imgxy = IMGX*IMGY;
 
     let time_per_sample = duration/samples as NumberType;
-    println!("Rendered {num_objects} objects in {duration} seconds");
+    let time_per_sample_per_resolution = time_per_sample *(600.0*600.0)/(imgxy as NumberType);
+
+    println!();
+    println!("Done!");
+    println!();
+    println!("objects: {num_objects}");
+    println!("resolution: {IMGX}*{IMGY} = {imgxy}");
     println!("Samples: {samples}");
     println!("num_objects: {num_objects}");
     println!("duration: {duration} seconds");
     println!("time/sample: {time_per_sample} seconds");
+    println!("time/sample/resolution*(600*600): {time_per_sample_per_resolution} seconds");
 
 
     imgbuf.save("output.png").unwrap();
@@ -249,7 +257,7 @@ fn ray_color<'a, const LEN: usize>(
         //    *ray_color(&scattered, world, light, (depth-1).min(1), acc)/pdf};
 
         //let mix_pdf = pdf_cosine;
-        let scattered = Ray{ro: rec.p, rd: mix_pdf.generate()};
+        let scattered = Ray::new(rec.p, mix_pdf.generate());
         let pdf = mix_pdf.value(scattered.rd);
 
         emitted 

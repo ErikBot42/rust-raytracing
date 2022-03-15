@@ -45,8 +45,10 @@ impl<'a> Material for Lambertian<'a> {
         
         let onb = ONB::build_from_w(rec.n);
 
-        sray.rd = onb.local(Vec3::random_cosine_direction()).normalized();
-        sray.ro = rec.p;
+        *sray = Ray::new(
+            rec.p,
+            onb.local(Vec3::random_cosine_direction()).normalized()
+            );
         *albedo = self.texture.value(rec.u, rec.v, rec.p);
         *pdf = onb.w.dot(sray.rd)/PI;
         true
@@ -78,6 +80,7 @@ impl Material for Emissive{
 }
 
 pub trait Material {
+    //TODO: return option
     fn scatter(&self,_ray: &Ray, _rec: &HitRecord, _albedo: &mut Vec3, _scattered: &mut Ray, _pdf: &mut NumberType) -> bool {false}
 
     fn scattering_pdf(&self, _ray: &Ray, _rec: &HitRecord, _sray: &Ray) -> NumberType {0.0}//TODO

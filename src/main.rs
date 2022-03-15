@@ -102,27 +102,31 @@ fn main() {
     let cube2 = HittableObject::Cuboid(Cuboid::new(Vec3::one(0.0), Vec3::new(165.0,165.0,165.0), white));
     let cube2 = HittableObject::RotateY(RotateY::new(&cube2, -18.0));
     let cube2 = HittableObject::Translate(Translate{object: &cube2, offset: Vec3::new(130.0,0.0,65.0)});
+
+    let sph = HittableObject::Sphere(Sphere::new(white, Vec3::one(300.0),100.0));
     //object_list.push(Arc::new(Mutex::new(cube2)));
 
     //let cube2 = HittableObject::Cuboid(Cuboid::new(Vec3::one(0.0), Vec3::one(165.0), white));
-    
-    const SIZE_CORNELL: usize = 8;
+    //fn new(q: Vec3, u: Vec3, v: Vec3, material: MaterialEnum<'a>) -> Self {
+    const SIZE_CORNELL: usize = 9;
     let cornell_box = [
         cube,
         HittableObject::XZRect(XZRect{material: light, x0: 213.0, x1: 343.0, z0: 227.0, z1: 332.0, k: 554.0, }),
         cube2,
-        HittableObject::YZRect(YZRect{material: green, y0: 0.0, y1: 555.0, z0: 0.0, z1: 555.0, k: 555.0, }),
+        //HittableObject::YZRect(YZRect{material: green, y0: 0.0, y1: 555.0, z0: 0.0, z1: 555.0, k: 555.0, }),
+        HittableObject::Quad(Quad::new(Vec3::new(555.0, 0.0, 0.0), Vec3::new(0.0,555.0,0.0), Vec3::new(0.0,0.0,555.0), white)), 
         HittableObject::YZRect(YZRect{material: red, y0: 0.0, y1: 555.0, z0: 0.0, z1: 555.0, k: 0.0, }),
         HittableObject::XZRect(XZRect{material: white, x0: 0.0, x1: 555.0, z0: 0.0, z1: 555.0, k: 555.0, }),
         HittableObject::XZRect(XZRect{material: white, x0: 0.0, x1: 555.0, z0: 0.0, z1: 555.0, k: 0.0, }),
-        HittableObject::XYRect(XYRect{material: white, x0: 0.0, x1: 555.0, y0: 0.0, y1: 555.0, k: 555.0, })
+        HittableObject::XYRect(XYRect{material: white, x0: 0.0, x1: 555.0, y0: 0.0, y1: 555.0, k: 555.0, }),
+        sph,
     ];
     const MAX_SIZE: usize = SIZE_CORNELL; 
 
 
-    const HEAP_SIZE: usize = MAX_SIZE*2;
+    const HEAP_SIZE: usize = MAX_SIZE*2*2;
     let mut hittable_list = cornell_box;
-    let bvh2: BVHHeap<HEAP_SIZE> = {BVHHeap::construct_new(&mut hittable_list[0..8])};
+    let bvh2: BVHHeap<HEAP_SIZE> = {BVHHeap::construct_new(&mut hittable_list[0..SIZE_CORNELL])};
 
     render(&lights, &bvh2, samples);
 

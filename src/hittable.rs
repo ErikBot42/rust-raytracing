@@ -60,8 +60,6 @@ impl<'a> HitRecord<'a> {
         self.front_face = ray.rd.dot(self.n) < 0.0;
         self.n = if self.front_face {self.n} else {-self.n}
     }
-
-
 }
 
 pub trait Hittable<'a> {
@@ -84,6 +82,7 @@ pub enum HittableObject<'a> {
     Cuboid(Cuboid<'a>),
     Translate(Translate<'a>),
     RotateY(RotateY<'a>),
+    Quad(Quad<'a>),
 }
 
 
@@ -100,6 +99,7 @@ impl<'a> Hittable<'a> for HittableObject<'a>
             HittableObject::Cuboid(u) => u.hit(ray, ray_t),
             HittableObject::Translate(t) => t.hit(ray, ray_t),
             HittableObject::RotateY(ry) => ry.hit(ray, ray_t),
+            HittableObject::Quad(q) => q.hit(ray, ray_t),
         }
     }
     fn bounding_box(&self, aabb: &mut AABB) -> bool {
@@ -113,6 +113,7 @@ impl<'a> Hittable<'a> for HittableObject<'a>
             HittableObject::Cuboid(u) => u.bounding_box(aabb),
             HittableObject::Translate(t) => t.bounding_box(aabb),
             HittableObject::RotateY(ry) => ry.bounding_box(aabb),
+            HittableObject::Quad(q) => q.bounding_box(aabb),
         }
     }
     fn pdf_value (&self, o: Vec3,v: Vec3) -> NumberType {
@@ -126,6 +127,8 @@ impl<'a> Hittable<'a> for HittableObject<'a>
             HittableObject::Cuboid(u) => u.pdf_value(o,v),
             HittableObject::Translate(t) => t.pdf_value(o,v),
             HittableObject::RotateY(ry) => ry.pdf_value(o,v),
+            HittableObject::Quad(q) => q.pdf_value(o,v),
+
         }
     }
     fn random (&self, o: Vec3) -> Vec3 {
@@ -139,6 +142,7 @@ impl<'a> Hittable<'a> for HittableObject<'a>
             HittableObject::Cuboid(u) => u.random(o),
             HittableObject::Translate(t) => t.random(o),
             HittableObject::RotateY(ry) => ry.random(o),
+            HittableObject::Quad(q) => q.random(o),
         }
 
     }
@@ -149,6 +153,86 @@ impl<'a> Default for HittableObject<'a> {
         HittableObject::Sphere(Sphere::default())
     }
 }
+
+
+#[derive(Default, Clone, Copy)]
+#[derive(Debug)]
+pub struct Quad<'a> {
+    q: Vec3,
+    u: Vec3,
+    v: Vec3,
+    material: MaterialEnum<'a>,
+    n: Vec3, 
+    d: NumberType,
+    w: Vec3,
+}
+
+impl<'a> Quad<'a> {
+    pub fn new(q: Vec3, u: Vec3, v: Vec3, material: MaterialEnum<'a>) -> Self {
+        let n = u.cross(v);
+        let normal = n.normalized();
+        let d = normal.dot(q);
+        let w = n / n.dot(n);
+
+        let n = normal;
+        Quad {q, u, v, material, n, d, w, }
+    }
+}
+
+impl<'a> Hittable<'a> for Quad<'a> {
+
+
+    fn bounding_box(&self, aabb: &mut AABB) -> bool {
+        *aabb = AABB::new(self.q, self.q + self.v + self.u);
+        aabb.pad();
+        true
+    }
+
+    fn hit(&self, ray: &Ray, ray_t: Interval) -> Option<HitRecord> {
+
+        let inv_denom = self.n.dot(ray.rd_inv);
+
+        // I am ignoring case ray is paralell to surface
+        
+        let t = (self.d - self.n.dot(ray.ro))*inv_denom;
+        if !ray_t.contains(t) {return None;}
+
+        let p = ray.at(t);
+        let planar = p-self.q;
+
+        let a = self.w.dot(planar.cross(self.v));
+        let b = self.w.dot(self.u.cross(planar));
+
+        if (a < 0.0) || (1.0 < a) || (b < 0.0) || (1.0 < b) {return None;}
+        
+        Some(HitRecord::new(&self.material, ray, t, self.n, a, b))
+    }
+
+
+
+    //fn pdf_value (&self, o: Vec3,v: Vec3) -> NumberType {
+    //    match self.hit(&Ray::new(o, v), Interval::EPSILON_UNIVERSE) {
+    //        None => 0.0,
+    //        Some(rec) => {
+    //            let area = (self.x1-self.x0)*(self.z1-self.z0);
+    //            let dist2 = rec.t*rec.t*v.dot2();
+    //            let cosine = v.dot(rec.n).abs()/v.length();
+    //            dist2/(cosine*area)
+    //        }
+    //    }
+    //}
+    //fn random (&self, o: Vec3) -> Vec3 {
+    //    let random_point = Vec3::new(random_range(self.x0,self.x1), self.k, random_range(self.z0, self.z1)); 
+    //    random_point - o
+    //}
+
+
+}
+
+
+
+
+
 
 #[derive(Default, Clone, Copy)]
 #[derive(Debug)]
@@ -163,18 +247,18 @@ pub struct XYRect<'a> {
 
 impl<'a> Hittable<'a> for XYRect<'a> {
     fn bounding_box(&self, aabb: &mut AABB) -> bool {
-        aabb.minimum = Vec3::new(
+        aabb.min = Vec3::new(
             self.x0,
             self.y0,
             self.k-0.0001);
-        aabb.maximum= Vec3::new(
+        aabb.max= Vec3::new(
             self.x0,
             self.y0,
             self.k-0.0001);
         true
     }
     fn hit(&self, ray: &Ray, ray_t: Interval) -> Option<HitRecord> {
-        let t = (self.k - ray.ro.z)/ray.rd.z;
+        let t = (self.k - ray.ro.z)*ray.rd_inv.z;
         if t<ray_t.min|| t>ray_t.max {return None;}
 
         let x = ray.ro.x + t*ray.rd.x;
@@ -216,18 +300,18 @@ pub struct XZRect<'a> {
 
 impl<'a> Hittable<'a> for XZRect<'a> {
     fn bounding_box(&self, aabb: &mut AABB) -> bool {
-        aabb.minimum = Vec3::new(
+        aabb.min = Vec3::new(
             self.x0,
             self.z0,
             self.k-0.0001);
-        aabb.maximum= Vec3::new(
+        aabb.max= Vec3::new(
             self.x0,
             self.z0,
             self.k-0.0001);
         true
     }
     fn hit(&self, ray: &Ray, ray_t: Interval) -> Option<HitRecord>{
-        let t = (self.k - ray.ro.y)/ray.rd.y;
+        let t = (self.k - ray.ro.y)*ray.rd_inv.y;
         if t<ray_t.min || t>ray_t.max {return None;}
 
         let x = ray.ro.x + t*ray.rd.x;
@@ -247,7 +331,7 @@ impl<'a> Hittable<'a> for XZRect<'a> {
 
     }
     fn pdf_value (&self, o: Vec3,v: Vec3) -> NumberType {
-        match self.hit(&Ray{ro: o, rd: v}, Interval::EPSILON_UNIVERSE) {
+        match self.hit(&Ray::new(o, v), Interval::EPSILON_UNIVERSE) {
             None => 0.0,
             Some(rec) => {
                 let area = (self.x1-self.x0)*(self.z1-self.z0);
@@ -277,18 +361,18 @@ pub struct YZRect<'a> {
 
 impl<'a> Hittable<'a> for YZRect<'a> {
     fn bounding_box(&self, aabb: &mut AABB) -> bool {
-        aabb.minimum = Vec3::new(
+        aabb.min = Vec3::new(
             self.y0,
             self.z0,
             self.k-0.0001);
-        aabb.maximum= Vec3::new(
+        aabb.max= Vec3::new(
             self.y0,
             self.z0,
             self.k-0.0001);
         true
     }
     fn hit(&self, ray: &Ray, ray_t: Interval) -> Option<HitRecord>{
-        let t = (self.k - ray.ro.x)/ray.rd.x;
+        let t = (self.k - ray.ro.x)*ray.rd_inv.x;
         if t<ray_t.min|| t>ray_t.max {return None;}
 
         let y = ray.ro.y + t*ray.rd.y;
@@ -336,13 +420,21 @@ impl<'a> Hittable<'a> for Sphere<'a> {
     fn bounding_box(&self,  aabb: &mut AABB) -> bool
     {
         println!("sphere bounding box");
-        aabb.maximum = self.center+Vec3::one(self.radius);
-        aabb.maximum = self.center+Vec3::one(self.radius);
+        aabb.max = self.center+Vec3::one(self.radius);
+        aabb.max = self.center+Vec3::one(self.radius);
         true
     }
 }
 
 impl<'a> Sphere<'a> {
+    pub fn new(material: MaterialEnum<'a>, center: Vec3, radius: NumberType) -> Self {
+        Sphere {
+            center,
+            radius,
+            material
+        }
+    }
+
     fn get_uv(&self, p: Vec3) -> (NumberType, NumberType)
     {
         let theta = (-p.y).acos();
@@ -634,7 +726,7 @@ impl<'a> Hittable<'a> for Cuboid<'a> {
             //}
     }
     fn bounding_box(&self,  aabb: &mut AABB) -> bool {
-        *aabb = AABB{minimum:self.min, maximum:self.max};
+        *aabb = AABB::new(self.min, self.max);
         true
     }
 }
@@ -705,7 +797,7 @@ pub struct Translate<'a> {
 impl<'a> Hittable<'a> for Translate<'a> {
 
     fn hit(&self, ray: &Ray, ray_t: Interval) -> Option<HitRecord> {
-        let moved = Ray{ro: ray.ro - self.offset, rd: ray.rd};
+        let moved = Ray::newi(ray.ro - self.offset, ray.rd, ray.rd_inv);
         
         match self.object.hit(&moved, ray_t) {
             None => None,
@@ -719,8 +811,8 @@ impl<'a> Hittable<'a> for Translate<'a> {
     }
     fn bounding_box(&self, aabb: &mut AABB) -> bool {
         if !self.object.bounding_box(aabb) {return false;}
-        aabb.minimum += self.offset;
-        aabb.maximum += self.offset;
+        aabb.min += self.offset;
+        aabb.max += self.offset;
         true
     }
 }
@@ -752,9 +844,9 @@ impl<'a> RotateY<'a> {
                         let i = i as NumberType;
                         let j = j as NumberType;
                         let k = k as NumberType;
-                        let x = i*aabb.minimum.x + (1.0-i)*aabb.minimum.x;
-                        let y = j*aabb.minimum.x + (1.0-j)*aabb.minimum.z;
-                        let z = k*aabb.minimum.x + (1.0-k)*aabb.minimum.z;
+                        let x = i*aabb.min.x + (1.0-i)*aabb.min.x;
+                        let y = j*aabb.min.x + (1.0-j)*aabb.min.z;
+                        let z = k*aabb.min.x + (1.0-k)*aabb.min.z;
 
                         let newx = cos_theta*x + sin_theta*z;
                         let newz = -sin_theta*x + cos_theta*z;
@@ -790,7 +882,7 @@ impl<'a> Hittable<'a> for RotateY<'a> {
         rd[0] = self.cos_theta*ray.rd[0] - self.sin_theta*ray.rd[2];
         rd[2] = self.sin_theta*ray.rd[0] + self.cos_theta*ray.rd[2];
 
-        let rotated = Ray{ro,rd};
+        let rotated = Ray::new(ro,rd);
 
         match self.object.hit(&rotated, ray_t) {
             None => None,

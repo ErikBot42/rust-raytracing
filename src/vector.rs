@@ -10,6 +10,7 @@ use crate::common::*;
 pub type Vec3 = V3<NumberType>;
 
 #[derive(Debug, Copy, Clone, Default)]
+#[repr(align(16), C)]
 pub struct V3<T>
 {
     pub x: T,
@@ -31,6 +32,33 @@ impl<T: Copy + Clone> V3<T> {
     //}
 }
 
+use num_traits::identities::One;
+use num_traits::ops::inv::Inv;
+
+impl<T: Inv<Output = T>> Inv for V3<T> {
+    type Output = V3<T>; 
+    fn inv(self) -> V3<<T as Inv>::Output> {
+        Self {
+            x: self.x.inv(), 
+            y: self.y.inv(), 
+            z: self.z.inv()
+        }
+        
+    }
+}
+
+impl<T: Real + One> V3<T> {
+
+    // multiplicative inverse
+    pub fn inv(self) -> Self{
+        Self {
+            x: T::one()/self.x, 
+            y: T::one()/self.y, 
+            z: T::one()/self.z
+        }
+    }
+
+}
 
 impl<T> Neg for V3<T> 
 where
@@ -132,7 +160,14 @@ impl<T> IndexMut<u8> for V3<T> {
         }
     }
 }
+ 
 
+//impl Div for NumberType {
+//    type Output = Vec3;
+//    fn div(self, rhs: Vec3) -> Self::Output {
+//        Vec3::default()
+//    }
+//}
 
 
 
@@ -167,10 +202,10 @@ where
     pub fn normalized(self) -> V3<T> {
         self/self.length()         
     }
-    //fn reflect(self, n: V3<T>) -> V3<T>
-    //{
-    //    self-n*(self.dot(n)+self.dot(n))
-    //}
+    pub fn reflect(self, n: V3<T>) -> V3<T>
+    {
+        self-n*(self.dot(n)+self.dot(n))
+    }
 }
 
 impl Vec3 {
@@ -249,14 +284,12 @@ impl Vec3 {
 
     //    //rand::distributions::Normal
     //}
-    //fn refract(self, n: Vec3, etiot: NumberType) -> Vec3 {
-    //    let cos_theta = -self.dot(n).min(1.0);
-    //    let r_out_prep = (self + n*cos_theta)*etiot;
-    //    let r_out_parallel = n*(-(1.0 - r_out_prep.dot2()).abs().sqrt());
-    //    r_out_prep+r_out_parallel
-    //}
+    pub fn refract(self, n: Vec3, etiot: NumberType) -> Vec3 {
+        let cos_theta = -self.dot(n).min(1.0);
+        let r_out_prep = (self + n*cos_theta)*etiot;
+        let r_out_parallel = n*(-(1.0 - r_out_prep.dot2()).abs().sqrt());
+        r_out_prep+r_out_parallel
+    }
 }
-
-
 
 //pub type NumberType = f32;
