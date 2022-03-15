@@ -1,6 +1,5 @@
 
 use rand::Rng;
-use rand_distr::StandardNormal;
 use num_traits::real::Real;
 use std::ops::{Add, AddAssign, Div, Mul, Neg, Sub, SubAssign, Index, IndexMut};
 
@@ -226,9 +225,9 @@ impl Vec3 {
     //
     pub fn random_dir() -> Vec3 {
         Vec3::new(
-            rng().sample(StandardNormal),
-            rng().sample(StandardNormal),
-            rng().sample(StandardNormal)
+            random_standard_normal(),
+            random_standard_normal(),
+            random_standard_normal(),
             )
     } 
     pub fn random_unit() -> Vec3 {
@@ -236,28 +235,28 @@ impl Vec3 {
     }
 
 
-    //pub fn random_cosine_direction() -> Vec3 {
-    //    let r1 = random_val();
-    //    let r2 = random_val();
-    //    let z = (1.0-r2).sqrt();
-
-    //    let phi = 2.0*PI*r1;
-    //    let x = phi.cos()*r2.sqrt();
-    //    let y = phi.sin()*r2.sqrt();
-
-    //    Vec3::new(x,y,z)
-    //}
-
     pub fn random_cosine_direction() -> Vec3 {
-        let mut v = Vec3::random_unit();
-        v.z += 1.0;
-        //v.z = v.z.abs();
-        v.normalized()
+        let r1 = random_val();
+        let r2 = random_val();
+        let z = (1.0-r2).sqrt();
+
+        let phi = 2.0*PI*r1;
+        let x = phi.cos()*r2.sqrt();
+        let y = phi.sin()*r2.sqrt();
+
+        Vec3::new(x,y,z)
     }
+
+    //pub fn random_cosine_direction() -> Vec3 {
+    //    let mut v = Vec3::random_unit();
+    //    v.z += 1.0;
+    //    //v.z = v.z.abs();
+    //    v.normalized()
+    //}
     pub fn random_in_unit_disk() -> Vec3 {
         Vec3::new(
-            rng().sample(StandardNormal),
-            rng().sample(StandardNormal),
+            random_standard_normal(),
+            random_standard_normal(),
             0.0
             ).normalized()
     }

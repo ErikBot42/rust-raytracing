@@ -68,9 +68,10 @@ use std::env;
 
 fn main() {
 
-    let args: Vec<String> = env::args().collect();
-    
-    let samples = args[1].parse::<u32>().unwrap();
+    //let args: Vec<String> = env::args().collect();
+    //
+    //let samples = args[1].parse::<u32>().unwrap();
+    let samples = 1;
 
 
     rng_seed();
@@ -103,12 +104,11 @@ fn main() {
     let cube2 = HittableObject::RotateY(RotateY::new(&cube2, -18.0));
     let cube2 = HittableObject::Translate(Translate{object: &cube2, offset: Vec3::new(130.0,0.0,65.0)});
 
-    let sph = HittableObject::Sphere(Sphere::new(white, Vec3::one(300.0),100.0));
     //object_list.push(Arc::new(Mutex::new(cube2)));
 
     //let cube2 = HittableObject::Cuboid(Cuboid::new(Vec3::one(0.0), Vec3::one(165.0), white));
     //fn new(q: Vec3, u: Vec3, v: Vec3, material: MaterialEnum<'a>) -> Self {
-    const SIZE_CORNELL: usize = 9;
+    const SIZE_CORNELL: usize = 13;
     let cornell_box = [
         cube,
         lights.clone(),
@@ -121,7 +121,11 @@ fn main() {
         HittableObject::XZRect(XZRect{material: white, x0: 0.0, x1: 555.0, z0: 0.0, z1: 555.0, k: 555.0, }),
         HittableObject::XZRect(XZRect{material: white, x0: 0.0, x1: 555.0, z0: 0.0, z1: 555.0, k: 0.0, }),
         HittableObject::XYRect(XYRect{material: white, x0: 0.0, x1: 555.0, y0: 0.0, y1: 555.0, k: 555.0, }),
-        sph,
+        HittableObject::Sphere(Sphere::new(white, Vec3::one(100.0),100.0)),
+        HittableObject::Sphere(Sphere::new(white, Vec3::one(200.0),100.0)),
+        HittableObject::Sphere(Sphere::new(white, Vec3::one(300.0),100.0)),
+        HittableObject::Sphere(Sphere::new(white, Vec3::one(400.0),100.0)),
+        HittableObject::Sphere(Sphere::new(white, Vec3::one(500.0),100.0)),
     ];
     const MAX_SIZE: usize = SIZE_CORNELL; 
 

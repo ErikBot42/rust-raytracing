@@ -11,7 +11,7 @@ impl ONB {
         self.u*p.x+self.v*p.y+self.w*p.z
     }
     pub fn build_from_w(n: Vec3) -> Self {
-        let w = n.normalized();
+        let w = n.normalized(); 
         let a = if w.x.abs() > 0.9 {Vec3::new(0.0,1.0,0.0)} else {Vec3::new(1.0,0.0,0.0)};
         let v = w.cross(a).normalized();
         let u = w.cross(v);

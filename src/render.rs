@@ -1,13 +1,12 @@
 
 
-use rand::Rng;
 use std::time::Instant;
 
 
 use crate::vector::Vec3;
 use crate::interval::Interval;
 use crate::common::*;
-use crate::random::rng;
+use crate::random::*;
 use crate::ray::Ray;
 use crate::pdf::*;
 use crate::hittable::*;
@@ -129,7 +128,7 @@ pub fn render<'a, const LEN: usize>(lights: &'a HittableObject<'a>, bvh2: &BVHHe
     let start = Instant::now();
     unsafe {
     //BUFFER.par_iter_mut()
-    BUFFER.iter_mut()
+    BUFFER.par_iter_mut()
         //.with_min_len(2)
         .zip((0u32..u32::MAX).into_iter())
         .for_each(|(line,y)| {
@@ -181,15 +180,16 @@ pub fn render<'a, const LEN: usize>(lights: &'a HittableObject<'a>, bvh2: &BVHHe
 
 }
 
+
 fn render_line<'a, const LEN: usize>(buffer: &mut [ColorValueType], lights: &'a HittableObject<'a>, bvh2: &BVHHeap<'a, LEN>, y: u32, scene: &Scene) {
-    let rng = rng();
+    //let rng = rng();
 
     for x in 0..scene.imgx {
         let mut col = Vec3::default();
         for _ in 0..scene.samples
         {
-            let u =     (x as NumberType+rng.gen::<NumberType>()) / (scene.imgx as NumberType - 1.0);
-            let v = 1.0-(y as NumberType+rng.gen::<NumberType>()) / (scene.imgy as NumberType - 1.0);
+            let u =     (x as NumberType+random_val()) / (scene.imgx as NumberType - 1.0);
+            let v = 1.0-(y as NumberType+random_val()) / (scene.imgy as NumberType - 1.0);
 
             let ray = scene.cam.get_ray(u,v);
 

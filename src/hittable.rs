@@ -400,7 +400,7 @@ impl<'a> Hittable<'a> for Sphere<'a> {
     fn hit(&self, ray: &Ray, ray_t: Interval) -> Option<HitRecord>
     {
         let oc = ray.ro - self.center;
-        let a = ray.rd.dot2();
+        let a = ray.rd.dot2(); // = 1 if rd is normalized
         let half_b = oc.dot(ray.rd);
         let c = oc.dot2()-self.radius.powi(2);
         let discriminant = half_b*half_b - a*c;

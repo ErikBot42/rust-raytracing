@@ -6,17 +6,21 @@ use crate::ray::*;
 use crate::vector::*;
 use crate::onb::*;
 
-//#[derive(Copy,Clone)]
-//struct Isotropic {
-//    albedo: Vec3,
-//}
-//impl Material for Isotropic {
-//    fn scatter(&self,_ray: &Ray, rec: &HitRecord, attenuation: &mut Vec3, sray: &mut Ray, pdf: &mut NumberType) -> bool {
-//        *sray = Ray {ro: rec.p, rd:Vec3::random_unit()};
-//        *attenuation = self.albedo;
-//        true 
-//    }
-//}
+#[derive(Copy,Clone)]
+struct Isotropic {
+    albedo: Vec3,
+}
+impl Material for Isotropic {
+    fn scatter(&self,_ray: &Ray, rec: &HitRecord, attenuation: &mut Vec3, sray: &mut Ray, pdf: &mut NumberType) -> bool {
+        *sray = Ray::new( rec.p, Vec3::random_unit());
+        *attenuation = self.albedo;
+        *pdf = 1.0 / (4.0 * PI);
+        true 
+    }
+    fn scattering_pdf(&self, _ray: &Ray, rec: &HitRecord, sray: &Ray) -> NumberType {
+        1.0 / (4.0 * PI)
+    }
+}
 
 #[derive(Copy,Clone,Default)]
 #[derive(Debug)]
@@ -95,7 +99,7 @@ pub enum MaterialEnum<'a> {
     Emissive(Emissive),
 //    Metal(Metal),
 //    Dielectric(Dielectric),
-//    Isotropic(Isotropic),
+    Isotropic(Isotropic),
 }
 
 impl<'a> Default for MaterialEnum<'a> {
@@ -113,7 +117,7 @@ impl<'a> Material for MaterialEnum<'a>
             MaterialEnum::Emissive(e) => e.scatter(ray, rec, attenuation, sray, pdf),
             //MaterialEnum::Metal(m) => m.scatter(ray, rec, attenuation, sray),
             //MaterialEnum::Dielectric(d) => d.scatter(ray, rec, attenuation, sray),
-            //MaterialEnum::Isotropic(i) => i.scatter(ray, rec, attenuation, sray),
+            MaterialEnum::Isotropic(i) => i.scatter(ray, rec, attenuation, sray),
         }
     }
     fn emission(&self) -> Vec3 {
@@ -122,7 +126,7 @@ impl<'a> Material for MaterialEnum<'a>
             MaterialEnum::Emissive(e) => e.emission(),
             //MaterialEnum::Metal(m) => m.emission(),
             //MaterialEnum::Dielectric(d) => d.emission(),
-            //MaterialEnum::Isotropic(i) => i.emission(),
+            MaterialEnum::Isotropic(i) => i.emission(),
         }
     }
     fn scattering_pdf(&self, _ray: &Ray, _rec: &HitRecord, _sray: &Ray) -> NumberType {
