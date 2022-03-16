@@ -3,12 +3,13 @@ use crate::vector::Vec3;
 use crate::common::*;
 //use crate::onb::ONB;
 //use crate::common::{NumberType,PI};
-use crate::random::random_range;
+use crate::random::*;
 //use crate::random::{rng_seed,rng,random_range,random_val};
 use crate::material::*;
 use crate::ray::*;
 use crate::interval::*;
 use crate::aabb::*;
+use crate::onb::*;
 
 #[derive(Copy, Clone, Default)]
 #[derive(Debug)]
@@ -68,8 +69,8 @@ pub trait Hittable<'a> {
     fn hit(&self, ray: &Ray, ray_t: Interval) -> Option<HitRecord>;
     fn bounding_box(&self, _aabb: &mut AABB) -> bool {false}  
 
-    fn pdf_value (&self, _o: Vec3,_v: Vec3) -> NumberType {panic!("pdf_value for Hittable is not implemented")}
-    fn random (&self, _o: Vec3) -> Vec3 {panic!("random for Hittable is not implemented")}
+    fn pdf_value (&self, _o: Vec3,_v: Vec3) -> NumberType {unimplemented!()}
+    fn random (&self, _o: Vec3) -> Vec3 {unimplemented!()}
 }
 
 #[derive(Clone)]
@@ -424,9 +425,44 @@ impl<'a> Hittable<'a> for Sphere<'a> {
         aabb.max = self.center+Vec3::one(self.radius);
         true
     }
-}
 
+    fn pdf_value (&self, o: Vec3, v: Vec3) -> NumberType {
+        if let Some(_rec) = self.hit(&Ray::new(o,v), Interval::EPSILON_UNIVERSE) {
+            let cos_theta_max = ((1.0 - self.radius*self.radius)/(self.center - o).dot2()).sqrt();
+            let solid_angle = 2.0*PI*(1.0-cos_theta_max);
+            1.0/solid_angle+_rec.u
+        }
+        else {
+            0.0
+        }
+    }
+    fn random (&self, o: Vec3) -> Vec3 {
+        let rd = self.center - o;
+        let dist2 = rd.dot2();
+        let uvw = ONB::build_from_w(rd);
+
+        
+        uvw.local(Self::random_to_sphere(self.radius, dist2))
+    }
+
+
+
+}
 impl<'a> Sphere<'a> {
+    fn random_to_sphere(radius: NumberType, distance_squared: NumberType) -> Vec3 {
+        let r1 = random_val();
+        let r2 = random_val();
+
+        let z = 1.0 + r2*( (1.0-radius*radius/distance_squared).sqrt() - 1.0);
+        
+        let phi = 2.0*PI*r1;
+        let x = phi.cos()*(1.0-z*z).sqrt();
+        let y = phi.sin()*(1.0-z*z).sqrt();
+
+        return Vec3::new(x,y,z);
+    }
+
+
     pub fn new(material: MaterialEnum<'a>, center: Vec3, radius: NumberType) -> Self {
         Sphere {
             center,

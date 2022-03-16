@@ -3,10 +3,8 @@
 use crate::vector::Vec3;
 use crate::interval::*;
 use crate::ray::*;
-use std::mem;
-
-
-    use core::cmp::Ordering;
+use core::mem;
+use core::cmp::Ordering;
 
 #[derive(Copy, Clone, Default)]
 #[derive(Debug)]

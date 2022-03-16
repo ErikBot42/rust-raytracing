@@ -1,7 +1,7 @@
 
 use crate::hittable::*;
-use crate::random::random_val;
-use crate::vector::Vec3;
+use crate::random::*;
+use crate::vector::*;
 use crate::common::{NumberType,PI};
 use crate::onb::ONB;
 
@@ -10,23 +10,64 @@ pub trait PDF {
     fn generate(&self) -> Vec3;
 }
 
+// Must be returnable by value
+// and must therefore be simple.
+#[derive(Clone, Copy)]
+pub enum PDFMaterialEnum {
+    CosinePDF(CosinePDF),
+    SpherePDF(SpherePDF),
+}
+impl<'a> PDF for PDFMaterialEnum {
+    fn value (&self, direction: Vec3) -> NumberType {
+        match self {
+            PDFMaterialEnum::CosinePDF(c) => c.value(direction),
+            PDFMaterialEnum::SpherePDF(s) => s.value(direction),
+        }
+    }
+    fn generate(&self) -> Vec3 {
+        match self {
+            PDFMaterialEnum::CosinePDF(c) => c.generate(),
+            PDFMaterialEnum::SpherePDF(s) => s.generate(),
+        }
+    }
+}
+
+// PDF that is supported by MixPDF
 #[derive(Clone, Copy)]
 pub enum PDFEnum<'a> {
-    CosinePDF(CosinePDF),
+    PDFMaterialEnum(PDFMaterialEnum),
     HittablePDF(HittablePDF<'a>),
 }
 impl<'a> PDF for PDFEnum<'a> {
     fn value (&self, direction: Vec3) -> NumberType {
         match self {
-            PDFEnum::CosinePDF(c) => c.value(direction),
+            PDFEnum::PDFMaterialEnum(c) => c.value(direction),
             PDFEnum::HittablePDF(h) => h.value(direction),
         }
     }
     fn generate(&self) -> Vec3 {
         match self {
-            PDFEnum::CosinePDF(c) => c.generate(),
+            PDFEnum::PDFMaterialEnum(c) => c.generate(),
             PDFEnum::HittablePDF(h) => h.generate(),
         }
+    }
+}
+
+#[derive(Clone, Copy)]
+#[derive(Default)]
+pub struct SpherePDF {}
+impl SpherePDF {pub fn new() -> Self {Self {}}}
+impl PDF for SpherePDF {
+    fn value (&self, _direction: Vec3) -> NumberType {
+        1.0/(4.0*PI)
+    }
+    fn generate(&self) -> Vec3 {
+        Vec3::random_unit()
+    }
+}
+impl SpherePDF {
+    pub fn create() -> PDFMaterialEnum {
+        PDFMaterialEnum::SpherePDF(SpherePDF{})
     }
 }
 
@@ -37,15 +78,15 @@ pub struct CosinePDF {
 impl PDF for CosinePDF {
     fn value (&self, direction: Vec3) -> NumberType {
         let cosine = direction.normalized().dot(self.onb.w);
-        if cosine < 0.0 {0.0} else {cosine/PI}
+        (cosine/PI).max(0.0)
     }
     fn generate(&self) -> Vec3 {
         self.onb.local(Vec3::random_cosine_direction())
     }
 }
-impl<'a> CosinePDF {
-    pub fn create(w: Vec3) -> PDFEnum<'a> {
-        PDFEnum::CosinePDF(CosinePDF { onb: ONB::build_from_w(w)})
+impl CosinePDF {
+    pub fn create(w: Vec3) -> PDFMaterialEnum {
+        PDFMaterialEnum::CosinePDF(CosinePDF { onb: ONB::build_from_w(w)})
     }
 }
 

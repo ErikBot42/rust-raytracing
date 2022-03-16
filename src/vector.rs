@@ -18,9 +18,11 @@ pub struct V3<T>
 }
 
 impl<T: Copy + Clone> V3<T> {
+    #[inline(always)]
     pub fn new(x: T, y: T, z: T) -> Self {
         Self { x, y, z }
     }
+    #[inline(always)]
     pub fn one(x: T) -> Self {
         Self { x, y:x, z:x }
     }
@@ -36,6 +38,7 @@ use num_traits::ops::inv::Inv;
 
 impl<T: Inv<Output = T>> Inv for V3<T> {
     type Output = V3<T>; 
+    #[inline(always)]
     fn inv(self) -> V3<<T as Inv>::Output> {
         Self {
             x: self.x.inv(), 
@@ -49,6 +52,7 @@ impl<T: Inv<Output = T>> Inv for V3<T> {
 impl<T: Real + One> V3<T> {
 
     // multiplicative inverse
+    #[inline(always)]
     pub fn inv(self) -> Self{
         Self {
             x: T::one()/self.x, 
@@ -63,6 +67,7 @@ impl<T> Neg for V3<T>
 where
 T: Neg + Neg<Output = T> + Copy + Clone {
     type Output = V3<T>; 
+    #[inline(always)]
     fn neg(self) -> V3<T> {
         V3::new(-self.x, -self.y, -self.z)
     }
@@ -72,6 +77,7 @@ impl<T> Add for V3<T>
 where
 T: Add + Add<Output = T> + Copy + Clone {
     type Output = V3<T>; 
+    #[inline(always)]
     fn add(self, other: V3<T>) -> V3<T> {
         V3::new(self.x+other.x, self.y+other.y, self.z+other.z)
     }
@@ -80,6 +86,7 @@ T: Add + Add<Output = T> + Copy + Clone {
 impl<T> AddAssign for V3<T> 
 where
 T: AddAssign + Copy + Clone {
+    #[inline(always)]
     fn add_assign(&mut self, other: V3<T>) {
         self.x+=other.x; self.y+=other.y; self.z+=other.z;
     }
@@ -89,6 +96,7 @@ impl<T> Sub for V3<T>
 where
 T: Sub + Sub<Output = T> + Copy + Clone {
     type Output = V3<T>; 
+    #[inline(always)]
     fn sub(self, other: V3<T>) -> V3<T> {
         V3::new(self.x-other.x, self.y-other.y, self.z-other.z)
     }
@@ -97,6 +105,7 @@ T: Sub + Sub<Output = T> + Copy + Clone {
 impl<T> SubAssign<V3<T>> for V3<T> 
 where
 T: SubAssign + Copy + Clone {
+    #[inline(always)]
     fn sub_assign(&mut self, other: V3<T>) {
         self.x-=other.x; self.y-=other.y; self.z-=other.z;
     }
@@ -106,6 +115,7 @@ impl<T> Mul<T> for V3<T>
 where
 T: Mul + Mul<Output = T> + Copy + Clone {
     type Output = V3<T>; 
+    #[inline(always)]
     fn mul(self, other: T) -> V3<T> {
         V3::new(self.x*other, self.y*other, self.z*other)
     }
@@ -115,6 +125,7 @@ impl<T> Mul for V3<T>
 where
 T: Mul + Mul<Output = T> + Copy + Clone {
     type Output = V3<T>; 
+    #[inline(always)]
     fn mul(self, other: V3<T>) -> V3<T> {
         V3::new(self.x*other.x, self.y*other.y, self.z*other.z)
     }
@@ -124,6 +135,7 @@ impl<T> Div<T> for V3<T>
 where
 T: Div + Div<Output = T> + Copy + Clone {
     type Output = V3<T>; 
+    #[inline(always)]
     fn div(self, other: T) -> V3<T> {
         V3::new(self.x/other, self.y/other, self.z/other)
     }
@@ -133,6 +145,7 @@ impl<T> Div for V3<T>
 where
 T: Div + Div<Output = T> + Copy + Clone {
     type Output = V3<T>; 
+    #[inline(always)]
     fn div(self, other: V3<T>) -> V3<T> {
         V3::new(self.x/other.x, self.y/other.y, self.z/other.z)
     }
@@ -140,21 +153,21 @@ T: Div + Div<Output = T> + Copy + Clone {
 
 impl<T> Index<u8> for V3<T> {
     type Output = T;
+    #[inline(always)]
     fn index(&self, index: u8) -> &T {
         match index {
             0 => &self.x,
             1 => &self.y,
-            2 => &self.z,
             _ => &self.z,
         }
     }
 }
 impl<T> IndexMut<u8> for V3<T> {
+    #[inline(always)]
     fn index_mut(&mut self, index: u8) -> &mut T{
         match index {
             0 => &mut self.x,
             1 => &mut self.y,
-            2 => &mut self.z,
             _ => &mut self.z,
         }
     }

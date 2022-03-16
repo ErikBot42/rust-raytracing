@@ -4,10 +4,10 @@ use crate::hittable::*;
 use crate::interval::*;
 use crate::aabb::*;
 use crate::ray::*;
-use crate::random::*;
+//use crate::random::*;
 
 
-use rand::Rng;
+//use rand::Rng;
 
 
 #[derive(Clone)]
@@ -37,12 +37,16 @@ struct Bvh;
 
 impl Bvh {
     #[allow(dead_code)]
+    #[inline(always)]
     fn top() -> usize {0}
 
+    #[inline(always)]
     fn left(index: usize) -> usize {(index+1)*2-1}
+    #[inline(always)]
     fn right(index: usize) -> usize {(index+1)*2+1-1}
 
     #[allow(dead_code)]
+    #[inline(always)]
     fn parent(index: usize) -> Option<usize> {
         if index == 0 {None}
         else {Some(index/2)}
@@ -65,14 +69,13 @@ impl<'a, const LEN: usize> Default for BVHHeap<'a, LEN>
     }
 }
 impl<'a, const LEN: usize> Hittable<'a> for BVHHeap<'a, LEN> {
+    #[inline(always)]
     fn hit(&self, ray: &Ray, ray_t: Interval) -> Option<HitRecord> {
         self.hit_recursive(ray, ray_t, 0)
     }
-    fn bounding_box(&self, _aabb: &mut AABB) -> bool {
-        unimplemented!();
-    }  
 }
 impl<'a, const LEN: usize> BVHHeap<'a, LEN> {
+    #[inline(always)]
     fn hit_recursive(&self, ray: &Ray, ray_t: Interval, index: usize) -> Option<HitRecord>{
         //println!("hit_recursive({index})");
         match &self.arr[index] {
@@ -164,12 +167,15 @@ impl<'a, const LEN: usize> BVHHeap<'a, LEN> {
         }
     }
 
+    #[inline(always)]
     fn at(&mut self, index: usize) -> &mut BVHEnum<'a> {
         &mut self.arr[index]
     }
+    #[inline(always)]
     fn left(&mut self, index: usize) -> &mut BVHEnum<'a> {
         self.at(Bvh::left(index))
     }
+    #[inline(always)]
     fn right(&mut self, index: usize) -> &mut BVHEnum<'a> {
         self.at(Bvh::right(index))
     }

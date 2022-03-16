@@ -2,7 +2,7 @@
 use rand_distr::StandardNormal;
 use rand::rngs::SmallRng;
 use rand::{Rng, SeedableRng};
-use std::cell::RefCell;
+use core::cell::RefCell;
 thread_local! {
 //static RNG: RefCell<SmallRng> = RefCell::new(SmallRng::from_entropy());
 static RNG: RefCell<SmallRng> = RefCell::new(SmallRng::seed_from_u64(48943982));
