@@ -56,6 +56,7 @@ impl Camera {
     }
     #[inline(always)]
     fn get_ray(&self, u: NumberType, v: NumberType) -> Ray {
+        //! Get camera ray from given UV coordinates
         //let rd = Vec3::random_in_unit_disk()*self.lens_radius;
         //let offset = rd*Vec3::new(u,v,0.0);
         ////let offset = u*rd.x + v*rd.y;
@@ -94,6 +95,7 @@ use image::RgbImage;
 use std::sync::Mutex;
 
 pub fn render<'a, const LEN: usize>(lights: &'a HittableObject<'a>, bvh2: &BVHHeap<'a, LEN>, samples: u32) {
+    //! Start the render and write the file
     println!("render tiem");
     //let scene;
 
@@ -114,7 +116,7 @@ pub fn render<'a, const LEN: usize>(lights: &'a HittableObject<'a>, bvh2: &BVHHe
 
     let scene = Scene{
         samples,
-        max_depth: 8,//8,//16,
+        max_depth: 2,//8,//16,
         cam,
         imgx: IMGX,
         imgy: IMGY,
@@ -191,6 +193,7 @@ pub fn render<'a, const LEN: usize>(lights: &'a HittableObject<'a>, bvh2: &BVHHe
 
 
 fn render_line<'a, const LEN: usize>(buffer: &mut [ColorValueType], lights: &'a HittableObject<'a>, bvh2: &BVHHeap<'a, LEN>, y: u32, scene: &Scene) {
+    //! Render a single line to the buffer
     //let rng = rng();
 
     for x in 0..scene.imgx {
@@ -223,6 +226,7 @@ fn render_line<'a, const LEN: usize>(buffer: &mut [ColorValueType], lights: &'a 
     }
 }
 
+/// Calculate the color for a given ray.
 //#[inline(always)] 
 fn ray_color<'a, const LEN: usize>(
     ray: Ray,
@@ -230,6 +234,11 @@ fn ray_color<'a, const LEN: usize>(
     light: &'a HittableObject<'a>,
     depth: u32,
     ) -> Vec3 {
+
+    fn pointLight<const LEN: usize>(normal: Vec3, lightPos: Vec3, world: &BVHHeap<LEN> ) -> NumberType {
+        0.0
+    }
+    
 
     #[inline(always)] 
     fn ray_color_rec<'a, const LEN: usize>(
@@ -240,92 +249,150 @@ fn ray_color<'a, const LEN: usize>(
         mut tcol: Vec3, // total color, sum of all light
         mut fcol: Vec3, // product of all color
         ) -> Vec3 {
-
-        if true {
-            loop {
-                if depth==0 {return tcol;}
-                depth = depth-1;
-
-                let rec = match world.hit(&ray, Interval::EPSILON_UNIVERSE) {
-                    None => return Vec3::new(0.0,0.0,0.0),
-                    Some(rec) => rec,
-                };
-
-                //let mut scattered = Ray::default();
-                //let mut pdf = 0.0;
-                //let mut albedo = Vec3::one(0.0);
-
-                let emitted = rec.material.emission();
-
-                let mut srec: ScatterRecord = ScatterRecord::default();
-                if !rec.material.scatter(&ray, &rec, &mut srec) {
-                    // a material that terminates rays should not have any direct lighting calc
-                    return fcol*emitted;
-                }
-
-                // surface color
-                let scol = srec.attenuation;
+        let mut firstLoop = true;
+        loop {
 
 
-                // direct lighting to this point (may include direct lighting rays)
-                let dcol = emitted;
+            if depth==0 {return tcol;}
+            depth = depth-1;
 
 
-                fcol = fcol * scol;
-                tcol = tcol + fcol * dcol;
+            let o_rd = ray.rd;
+            let o_ro = ray.ro;
 
-
-                match srec.scatter {
-                    ScatterEnum::RaySkip{ray: scattered} => {
-                        ray = scattered;
-                    },
-                    ScatterEnum::Pdf{pdf} => {
-
-                        let pdf_material = PDFEnum::PDFMaterialEnum(pdf);
-
-                        //let p = CosinePDF::new(rec.n);
-                        //scattered = Ray{ro: rec.p, rd: p.generate()};
-                        //pdf = p.value(scattered.rd);
-
-                        //let light_pdf = HittablePDF::new(light, rec.p);
-                        //let scattered = Ray{ro: rec.p, rd:light_pdf.generate()};
-                        //let pdf = light_pdf.value(scattered.rd);
-
-                        let pdf_light = HittablePDF::create(light, rec.p);
-                        //let pdf_material = PDFEnum::PDFMaterialEnum(CosinePDF::create(rec.n));
-                        //let mix_pdf = pdf_light;
-                        let mix_pdf = MixPDF::new(&pdf_light, &pdf_material, 0.5);
-                        //let c1 = {
-                        ////let mix_pdf = pdf_light;
-                        //let scattered = Ray{ro: rec.p, rd: mix_pdf.generate()};
-                        //let pdf = mix_pdf.value(scattered.rd);
-                        //dcol 
-                        //    + albedo*rec.material.scattering_pdf(ray, &rec, &scattered)
-                        //    *ray_color(&scattered, world, light, (depth-1).min(1), acc)/pdf};
-
-                        //let mix_pdf = pdf_cosine;
-                        let scattered = Ray::new(rec.p, mix_pdf.generate());
-
-                        let pdf = mix_pdf.value(scattered.rd);
-
-
-                        let pdf_factor = rec.material.scattering_pdf(&ray, &rec, &scattered)/pdf;
-
-                        ray = scattered;
-                        fcol = fcol * pdf_factor;
-                    }
-
-                }
-                //ray_color_rec(ray, world, light, depth, tcol, fcol)
-            }
-        }
-        else {
             let rec = match world.hit(&ray, Interval::EPSILON_UNIVERSE) {
-                None => return Vec3::new(0.0,0.0,0.0),
+                None => return Vec3::new(0.0,0.0,0.0), // background
                 Some(rec) => rec,
             };
-            (rec.n+Vec3::one(1.0))*rec.t*0.1
+
+            let ray_dist = (rec.p-ray.ro).length();
+
+            let light_ro = Vec3::new(550.0/4.0, 500.0, 550.0*(3.0/4.0));
+
+            let light_rd = light_ro-rec.p;
+            let light_dist = light_rd.length();
+
+            //let dp = light_ro-rec.p;
+            //        return {
+            //            let fac = 0.001*10000000000.0;
+            //            Vec3::new(
+            //                (dp.x*fac)*0.5,
+            //                (dp.y*fac)*0.5,
+            //                (dp.z*fac)*0.5,
+            //                )
+            //        };
+
+
+
+            //let a = (a.length()*0.1).sin();
+            //return Vec3::new(a,rec.t.sin(),1.0-a);
+
+            //let mut scattered = Ray::default();
+            //let mut pdf = 0.0;
+            //let mut albedo = Vec3::one(0.0);
+            //
+            let light_ray = Ray::new(light_ro, -light_rd);
+
+
+
+
+            let emitted = rec.material.emission();
+
+            let early_exit = false;// fcol.dot2()<(0.0001 as NumberType).powi(2);
+
+            let mut srec: ScatterRecord = ScatterRecord::default();
+            if early_exit || !rec.material.scatter(&ray, &rec, &mut srec) {
+                // a material that terminates rays should not have any direct lighting calc
+                return fcol*emitted;
+            }
+            let shadow = match world.hit(&light_ray, Interval::new(0.0001,0.99)) {
+                None => 1.0,
+                Some(_) => {0.01}
+            };
+            let dcol = emitted
+                +
+                srec.attenuation*
+                //light_rd.dot(rec.n).max(0.0)*
+                o_rd.normalized().dot(-rec.n).max(0.0)*
+                100000.0/(light_dist*light_dist)*
+                shadow*
+                1.0;
+
+
+            // surface color
+            let scol = srec.attenuation;
+
+
+            // direct lighting to this point (may include direct lighting rays)
+            //let dcol = Vec3::new(1.0,0.5,0.0)*(rec.p-Vec3::new(250.0,350.0,250.0)).dot(-rec.n).max(0.0)*0.005;
+            //
+
+
+
+            //TODO: cache first ray cast (branch at first hit), hittableArray with early exit.
+            //let light_pos = Vec3::new(250.0,350.0,250.0);
+            //let light_ray = Ray::new(rec.p, light_pos-rec.p);
+            //
+            //let dcol = Vec3::one(1.0)*shadow;
+
+            fcol = fcol * scol;
+            tcol = tcol + fcol * dcol;
+            match srec.scatter {
+                ScatterEnum::RaySkip{ray: scattered} => {
+                    ray = scattered;
+                },
+                ScatterEnum::Pdf{pdf} => {
+
+                    let pdf_material = PDFEnum::PDFMaterialEnum(pdf);
+
+                    //let p = CosinePDF::new(rec.n);
+                    //scattered = Ray{ro: rec.p, rd: p.generate()};
+                    //pdf = p.value(scattered.rd);
+
+                    //let light_pdf = HittablePDF::new(light, rec.p);
+                    //let scattered = Ray{ro: rec.p, rd:light_pdf.generate()};
+                    //let pdf = light_pdf.value(scattered.rd);
+
+                    let pdf_light = HittablePDF::create(light, rec.p);
+                    //let pdf_material = PDFEnum::PDFMaterialEnum(CosinePDF::create(rec.n));
+                    //let mix_pdf = pdf_light;
+                    let mix_pdf = MixPDF::new(&pdf_light, &pdf_material, 0.0);
+                    //let c1 = {
+                    ////let mix_pdf = pdf_light;
+                    //let scattered = Ray{ro: rec.p, rd: mix_pdf.generate()};
+                    //let pdf = mix_pdf.value(scattered.rd);
+                    //dcol 
+                    //    + albedo*rec.material.scattering_pdf(ray, &rec, &scattered)
+                    //    *ray_color(&scattered, world, light, (depth-1).min(1), acc)/pdf};
+
+                    //let mix_pdf = pdf_cosine;
+                    let scattered = Ray::new(rec.p, mix_pdf.generate());
+
+                    let pdf = mix_pdf.value(scattered.rd);
+
+
+                    let pdf_factor = rec.material.scattering_pdf(&ray, &rec, &scattered)/pdf;
+
+                    ray = scattered;
+                    fcol = fcol * pdf_factor;
+                }
+
+            }
+            firstLoop = false;
         }
+        //ray_color_rec(ray, world, light, depth, tcol, fcol)
+        //ray_color_rec(ray, world, light, depth, tcol, fcol/8.0) +
+        //ray_color_rec(ray, world, light, depth, tcol, fcol/8.0) +
+        //ray_color_rec(ray, world, light, depth, tcol, fcol/8.0) +
+        //ray_color_rec(ray, world, light, depth, tcol, fcol/8.0) 
+        //ray_color_rec(ray, world, light, depth, tcol, fcol)
+        //else {
+        //    let rec = match world.hit(&ray, Interval::EPSILON_UNIVERSE) {
+        //        None => return Vec3::new(0.0,0.0,0.0),
+        //        Some(rec) => rec,
+        //    };
+        //    (rec.n+Vec3::one(1.0))*rec.t*0.1
+        //}
     }
 
 

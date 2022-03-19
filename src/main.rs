@@ -19,6 +19,7 @@ pub mod material;
 pub mod aabb;
 pub mod bvh;
 pub mod render;
+pub mod light;
 
 //use crate::HittableObject::*;
 use crate::vector::Vec3;
@@ -65,6 +66,8 @@ use crate::render::*;
 //}
 //use std::env;
 
+
+
 fn main() {
 
     //let args: Vec<String> = env::args().collect();
@@ -91,15 +94,15 @@ fn main() {
         else{Vec3::new(15.0,15.0,15.0)}});
         
 
-    let sph = HittableObject::Sphere(Sphere::new(glass, Vec3::new(200.0,100.0,250.0),100.0));
+    let sph = HittableObject::Sphere(Sphere::new(checker, Vec3::new(200.0,100.0,250.0),100.0));
 
-    let top_light =  if big_light {XZRect{material: light, x0: 113.0, x1: 443.0, z0: 127.0, z1: 432.0, k: 554.0, }}
-    else {XZRect{material: light, x0: 213.0, x1: 343.0, z0: 227.0, z1: 332.0, k: 554.0, }};
+    let top_light =  if big_light {XZRect{material: gold, x0: 113.0, x1: 443.0, z0: 127.0, z1: 432.0, k: 554.0, }}
+    else {XZRect{material: gold, x0: 213.0, x1: 343.0, z0: 227.0, z1: 332.0, k: 554.0, }};
 
     let lights = HittableObject::XZRect(top_light);
     //let lights = sph.clone();
     
-    let cube = HittableObject::Cuboid(Cuboid::new(Vec3::one(0.0), Vec3::new(165.0,330.0,165.0), gold));
+    let cube = HittableObject::Cuboid(Cuboid::new(Vec3::one(0.0), Vec3::new(165.0,330.0,165.0), white));
     let cube = HittableObject::RotateY(RotateY::new(&cube,  15.0));
     let cube = HittableObject::Translate(Translate{object: &cube, offset: Vec3::new(265.0,00.0,295.0)});
 
@@ -111,10 +114,10 @@ fn main() {
 
     //let cube2 = HittableObject::Cuboid(Cuboid::new(Vec3::one(0.0), Vec3::one(165.0), white));
     //fn new(q: Vec3, u: Vec3, v: Vec3, material: MaterialEnum<'a>) -> Self {
-    const SIZE_CORNELL: usize = 8;
+    const SIZE_CORNELL: usize = 7;
     let cornell_box = [
         cube,
-        HittableObject::XZRect(top_light.clone()),
+        //HittableObject::XZRect(top_light.clone()),
         //HittableObject::XZRect(XZRect{material: light, x0: 213.0, x1: 343.0, z0: 227.0, z1: 332.0, k: 554.0, }),
         //cube2,
         //HittableObject::YZRect(YZRect{material: green, y0: 0.0, y1: 555.0, z0: 0.0, z1: 555.0, k: 555.0, }),
@@ -128,11 +131,17 @@ fn main() {
         //HittableObject::XZRect(XZRect{material: white, x0: 0.0, x1: 555.0, z0: 0.0, z1: 555.0, k: 0.0, }),
         //HittableObject::XYRect(XYRect{material: white, x0: 0.0, x1: 555.0, y0: 0.0, y1: 555.0, k: 555.0, }),
         sph, 
-        //HittableObject::Sphere(Sphere::new(metal, Vec3::one(200.0),100.0)),
-        //HittableObject::Sphere(Sphere::new(metal, Vec3::one(300.0),100.0)),
-        //HittableObject::Sphere(Sphere::new(metal, Vec3::one(400.0),100.0)),
-        //HittableObject::Sphere(Sphere::new(metal, Vec3::one(500.0),100.0)),
+//        HittableObject::Sphere(Sphere::new(aluminum, Vec3::one(200.0),100.0)),
+//        HittableObject::Sphere(Sphere::new(aluminum, Vec3::one(300.0),100.0)),
+//        HittableObject::Sphere(Sphere::new(aluminum, Vec3::one(400.0),100.0)),
+//        HittableObject::Sphere(Sphere::new(aluminum, Vec3::one(500.0),100.0)),
     ];
+
+    
+
+
+
+
     const MAX_SIZE: usize = SIZE_CORNELL; 
 
 

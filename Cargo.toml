@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-image = "*"
+image = {version = "*", features = ["png"]}
 num-traits = "*"
 rand = {version = "*", features = ["small_rng"]}
 #lazy_static = "*"
@@ -17,18 +17,18 @@ rand_distr = "*"
 #micromath = "*"
 #array-concat = "*"
 rayon = "*"
-thread_local = "*"
+#thread_local = "*"
 
 
 #[rust]
 #debuginfo-level = 1
 
-#[profile.release]
+[profile.release]
 #lto = "fat"
 #codegen-units = 1
 #panic = "abort"
 
-#debug = 1
+#debug = 2
 #lto = true
 #panic = "abort"
 

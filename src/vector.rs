@@ -1,7 +1,6 @@
 
-use rand::Rng;
 use num_traits::real::Real;
-use std::ops::{Add, AddAssign, Div, Mul, Neg, Sub, SubAssign, Index, IndexMut};
+use core::ops::{Add, AddAssign, Div, Mul, Neg, Sub, SubAssign, Index, IndexMut};
 
 use crate::random::*;
 use crate::common::*;
@@ -209,13 +208,15 @@ where
     T: Mul<T, Output = T> + Add<T, Output = T> + Copy + Clone + Real
 {
     pub fn length(self) -> T {
+        //! Length of vector
         self.dot2().sqrt()
     }
     pub fn normalized(self) -> V3<T> {
+        //! Turn vector into unit vector
         self/self.length()         
     }
-    pub fn reflect(self, n: V3<T>) -> V3<T>
-    {
+    pub fn reflect(self, n: V3<T>) -> V3<T> {
+        //! Reflect vector with given normal
         self-n*(self.dot(n)+self.dot(n))
     }
 }
@@ -237,6 +238,7 @@ impl Vec3 {
     //}
     //
     pub fn random_dir() -> Vec3 {
+        //! Random vector, not normalized
         Vec3::new(
             random_standard_normal(),
             random_standard_normal(),
@@ -244,11 +246,13 @@ impl Vec3 {
             )
     } 
     pub fn random_unit() -> Vec3 {
+        //! Random vector, normalized
         Vec3::random_dir().normalized()
     }
 
 
     pub fn random_cosine_direction() -> Vec3 {
+        //! Random vector, in a cosine distrubution pointing upwards
         let r1 = random_val();
         let r2 = random_val();
         let z = (1.0-r2).sqrt();
@@ -267,6 +271,7 @@ impl Vec3 {
     //    v.normalized()
     //}
     pub fn random_in_unit_disk() -> Vec3 {
+        //! Random vector, in a disk in the XY plane
         Vec3::new(
             random_standard_normal(),
             random_standard_normal(),
@@ -298,6 +303,7 @@ impl Vec3 {
     //    //rand::distributions::Normal
     //}
     pub fn refract(self, n: Vec3, etiot: NumberType) -> Vec3 {
+        //! Refract ray
         let cos_theta = -self.dot(n).min(1.0);
         let r_out_prep = (self + n*cos_theta)*etiot;
         let r_out_parallel = n*(-(1.0 - r_out_prep.dot2()).abs().sqrt());

@@ -3,7 +3,7 @@ use crate::vector::Vec3;
 use crate::common::NumberType;
 
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Copy, Clone)]
 pub struct Ray {
     pub ro: Vec3,
     pub rd: Vec3,

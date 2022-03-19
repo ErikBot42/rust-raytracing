@@ -55,6 +55,7 @@ impl Bvh {
 
 // switch node -> enum to store actual objects too
 #[derive(Debug)]
+/// Acceleration structure for list of objects, stored in an array
 pub struct BVHHeap<'a, const LEN: usize> {
     arr: [BVHEnum<'a>; LEN],
 }
@@ -108,6 +109,7 @@ impl<'a, const LEN: usize> BVHHeap<'a, LEN> {
         }
     }
     pub fn construct_new(objects: &mut [HittableObject<'a>]) -> Self {
+        //! create a BVH from list of objects
         let mut bvh = Self::default();
         bvh.construct(objects, 0, 0);
         bvh

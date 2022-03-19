@@ -415,6 +415,7 @@ impl<'a> Hittable<'a> for Sphere<'a> {
         let t = root;
         let p = ray.at(root);
         let outward_normal = (p - self.center)/self.radius;
+        let (u,v) = (outward_normal.x+1.0,outward_normal.z+1.0);
         let (u,v) = self.get_uv(outward_normal);
         Some(HitRecord::new(&self.material, ray, t, outward_normal, u, v))
     }
