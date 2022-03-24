@@ -73,7 +73,7 @@ fn main() {
     //let args: Vec<String> = env::args().collect();
     //
     //let samples = args[1].parse::<u32>().unwrap();
-    let samples = 32;
+    let samples = 256;
 
     let big_light = false;
     let c1 = SolidColor::create(Vec3::one(0.8));

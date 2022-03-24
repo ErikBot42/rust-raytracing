@@ -12,6 +12,7 @@ use crate::pdf::*;
 use crate::hittable::*;
 use crate::material::*;
 use crate::bvh::*;
+use crate::light::*;
 
 
 #[derive(Clone, Copy, Default, Debug)]
@@ -235,9 +236,29 @@ fn ray_color<'a, const LEN: usize>(
     depth: u32,
     ) -> Vec3 {
 
-    fn pointLight<const LEN: usize>(normal: Vec3, lightPos: Vec3, world: &BVHHeap<LEN> ) -> NumberType {
-        0.0
-    }
+    const MIN_LIGHT: NumberType = 0.1;
+
+    //fn point_light<const LEN: usize>(view_dir: Vec3, point: Vec3, normal: Vec3, light_ro: Vec3, world: &BVHHeap<LEN> ) -> NumberType {
+    //        let light_rd = light_ro-point;
+    //        if light_rd.normalized().dot(-Vec3::new(0.0,-1.0,0.0)) < 0.8 {return 0.0;}
+    //        let light_dist = light_rd.length();
+    //        let light_rd = light_rd/light_dist;
+    //        let light_ray = Ray::new(light_ro, -light_rd);
+
+    //        let min_rad = 100.0;
+
+    //        let interval = Interval::new(min_rad+0.0001,0.99*light_dist);
+    //        if light_dist < min_rad {return 0.0;}
+
+    //        let shadow = match world.hit(&light_ray, interval) {
+    //            None => 1.0,
+    //            Some(_) => {0.0}
+    //        };
+
+    //            100000.0/(light_dist*light_dist)*
+    //            shadow*
+    //            1.0
+    //}
     
 
     #[inline(always)] 
@@ -267,11 +288,11 @@ fn ray_color<'a, const LEN: usize>(
 
             let ray_dist = (rec.p-ray.ro).length();
 
-            let light_ro = Vec3::new(550.0/4.0, 500.0, 550.0*(3.0/4.0));
 
-            let light_rd = light_ro-rec.p;
-            let light_dist = light_rd.length();
-
+            //let light_ro = Vec3::new(300.0, 50.0, 500.0);
+            //let light_ro = Vec3::new(320.0, 190.0, 500.0);
+            //let light_ro = Vec3::new(550.0/2.0, 620.0, 550.0/2.0);
+            let light_ro = Vec3::new(550.0*2.0/4.0, 50.0, 500.0);
             //let dp = light_ro-rec.p;
             //        return {
             //            let fac = 0.001*10000000000.0;
@@ -291,7 +312,6 @@ fn ray_color<'a, const LEN: usize>(
             //let mut pdf = 0.0;
             //let mut albedo = Vec3::one(0.0);
             //
-            let light_ray = Ray::new(light_ro, -light_rd);
 
 
 
@@ -305,22 +325,40 @@ fn ray_color<'a, const LEN: usize>(
                 // a material that terminates rays should not have any direct lighting calc
                 return fcol*emitted;
             }
-            let shadow = match world.hit(&light_ray, Interval::new(0.0001,0.99)) {
-                None => 1.0,
-                Some(_) => {0.01}
-            };
-            let dcol = emitted
-                +
-                srec.attenuation*
-                //light_rd.dot(rec.n).max(0.0)*
-                o_rd.normalized().dot(-rec.n).max(0.0)*
-                100000.0/(light_dist*light_dist)*
-                shadow*
-                1.0;
-
-
             // surface color
             let scol = srec.attenuation;
+
+            let light_col = Vec3::new(1.0,0.8,1.5);
+
+            let the_point_light = PointLight::new(light_ro, light_col);
+
+            let dcol = emitted
+                +scol*
+                //(point_light::<LEN>(o_ro, rec.p, rec.n, light_ro, world)*
+                (the_point_light.calc_light(world, rec.p)).0*
+                (((rec.p-light_ro).normalized().dot(-rec.n)).max(0.0).powi(2) + 0.0*0.002)*
+                //o_rd.normalized().dot(-rec.n).max(0.0)*2.0*
+                //light_col*
+                0.7
+                
+                ;
+            
+            if firstLoop {
+                let ray_start = o_ro;
+                let ray_end = rec.p;
+
+                let samples = 8;
+
+                let mut acc = Vec3::one(0.0);
+                for _ in 0..samples {
+                    let t = random_val().abs();
+                    let point = ray_start*t + ray_end*(1.0-t);
+                    acc += the_point_light.calc_light(world, point).0;
+                    //acc += point_light::<LEN>(o_ro, point, rec.n, light_ro, world);
+
+                }
+                tcol += light_col*acc/samples as NumberType*(ray_start-ray_end).length()/2000.0 ;
+            }
 
 
             // direct lighting to this point (may include direct lighting rays)
