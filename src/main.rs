@@ -70,16 +70,16 @@ fn main() {
     //let args: Vec<String> = env::args().collect();
     //
     //let samples = args[1].parse::<u32>().unwrap();
-    let samples = 256;
+    let samples = 1;//256;
 
     let big_light = false;
     let c1 = SolidColor::create(Vec3::one(0.8));
     let c2 = SolidColor::create(Vec3::new(0.1,0.1,0.6));
     let checker = CheckerTexture::create(& c1, & c2 );
-    let checker = Lambertian::create(checker);
+    //let checker = Lambertian::create(checker);
 
-    let aluminum = Metal::col(Vec3::new(0.8, 0.85, 0.88)*0.5, 0.5);
-    let gold = Metal::col(Vec3::new(255.0,215.0,0.0)/255.0, 0.3);
+    //let aluminum = Metal::col(Vec3::new(0.8, 0.85, 0.88)*0.5, 0.5);
+    //let gold = Metal::col(Vec3::new(255.0,215.0,0.0)/255.0, 0.3);
     let glass = Dielectric::create(1.5);
 
     //let glass = MaterialEnum::Dielectric(Dielectric{ir:1.5});

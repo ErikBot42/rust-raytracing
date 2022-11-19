@@ -23,10 +23,10 @@ thread_local = "*"
 #[rust]
 #debuginfo-level = 1
 
-#[profile.release]
-#lto = "fat"
+[profile.release]
+lto = "thin"
 #codegen-units = 1
-#panic = "abort"
+panic = "abort"
 
 #debug = 1
 #lto = true

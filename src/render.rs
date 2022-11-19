@@ -130,8 +130,8 @@ pub fn render<'a, const LEN: usize>(lights: &'a HittableObject<'a>, bvh2: &BVHHe
 
     let rows_rendered = Mutex::new(0);
     let rows_rendered = &rows_rendered;
-    // Multithreaded
     
+    // Multithreaded
     let start = Instant::now();
     unsafe {
     BUFFER.par_iter_mut()
