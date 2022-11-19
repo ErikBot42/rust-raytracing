@@ -96,7 +96,7 @@ pub fn render<'a, const LEN: usize>(
     //let scene;
 
     const ASPECT_RATIO: NumberType = 1.0; //16.0/9.0;
-    const IMGX: usize = 512; //2160;
+    const IMGX: usize = 256;//512; //2160;
     const IMGY: usize = ((IMGX as NumberType) / ASPECT_RATIO) as usize;
 
     //let mut imgbuf = image::ImageBuffer::<image::Rgb<u8>>::new(IMGX as u32, IMGY as u32);
