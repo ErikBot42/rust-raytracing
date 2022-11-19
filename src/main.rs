@@ -73,9 +73,9 @@ fn main() {
     let samples = 1;//256;
 
     let big_light = false;
-    let c1 = SolidColor::create(Vec3::one(0.8));
-    let c2 = SolidColor::create(Vec3::new(0.1,0.1,0.6));
-    let checker = CheckerTexture::create(& c1, & c2 );
+    //let c1 = SolidColor::create(Vec3::one(0.8));
+    //let c2 = SolidColor::create(Vec3::new(0.1,0.1,0.6));
+    //let checker = CheckerTexture::create(& c1, & c2 );
     //let checker = Lambertian::create(checker);
 
     //let aluminum = Metal::col(Vec3::new(0.8, 0.85, 0.88)*0.5, 0.5);
@@ -114,7 +114,7 @@ fn main() {
     const SIZE_CORNELL: usize = 8;
     let cornell_box = [
         cube,
-        HittableObject::XZRect(top_light.clone()),
+        HittableObject::XZRect(top_light),
         //HittableObject::XZRect(XZRect{material: light, x0: 213.0, x1: 343.0, z0: 227.0, z1: 332.0, k: 554.0, }),
         //cube2,
         //HittableObject::YZRect(YZRect{material: green, y0: 0.0, y1: 555.0, z0: 0.0, z1: 555.0, k: 555.0, }),
