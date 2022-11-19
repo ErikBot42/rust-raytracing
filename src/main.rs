@@ -70,7 +70,7 @@ fn main() {
     //let args: Vec<String> = env::args().collect();
     //
     //let samples = args[1].parse::<u32>().unwrap();
-    let samples = 32;
+    let samples = 256;
 
     let big_light = false;
     let c1 = SolidColor::create(Vec3::one(0.8));
@@ -99,7 +99,7 @@ fn main() {
     let lights = HittableObject::XZRect(top_light);
     //let lights = sph.clone();
     
-    let cube = HittableObject::Cuboid(Cuboid::new(Vec3::one(0.0), Vec3::new(165.0,330.0,165.0), gold));
+    let cube = HittableObject::Cuboid(Cuboid::new(Vec3::one(0.0), Vec3::new(165.0,330.0,165.0), white));
     let cube = HittableObject::RotateY(RotateY::new(&cube,  15.0));
     let cube = HittableObject::Translate(Translate{object: &cube, offset: Vec3::new(265.0,00.0,295.0)});
 
