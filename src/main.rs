@@ -19,6 +19,7 @@ pub mod material;
 pub mod aabb;
 pub mod bvh;
 pub mod render;
+pub mod light;
 
 //use crate::HittableObject::*;
 use crate::vector::Vec3;

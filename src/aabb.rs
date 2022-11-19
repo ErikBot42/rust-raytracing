@@ -21,7 +21,6 @@ impl AABB {
 
     pub fn hit(&self, ray: &Ray, mut ray_t: Interval) -> bool
     {
-
         for a in 0..3 {
             //let invd = 1.0/ray.rd[a];
             let invd = ray.rd_inv[a];
@@ -34,8 +33,8 @@ impl AABB {
         }
         true
     }
-    pub fn surrounding_box(&self, other: AABB) -> AABB
-    {
+    pub fn surrounding_box(&self, other: AABB) -> AABB {
+        //! Calc AABB that surrounds this AABB
         let min = Vec3::new(
             self.min.x.min(other.min.x),
             self.min.y.min(other.min.y),
@@ -47,9 +46,11 @@ impl AABB {
         AABB {min, max}
     }
     pub fn compare(&self, other: AABB, axis: u8) -> Ordering {
+        //! Compare along given axis (for BVH)
         self.min[axis].partial_cmp(&other.min[axis]).unwrap()
     }
     pub fn pad(&mut self) {
+        //! Make sure no direction is infinitely small.
         let delta = 0.0001;
         for i in 0..3 {
             let size = self.min[i]-self.max[i];
